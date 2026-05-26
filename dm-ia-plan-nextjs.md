@@ -28,12 +28,12 @@ Proyecto de portafolio: Dungeon Master con IA que mantiene memoria persistente d
 
 ### Servicios externos
 
-- [ ] **0.6** Crear proyecto en Firebase (Firestore + Auth) o Supabase
-- [ ] **0.7** Instalar SDK correspondiente: `firebase` o `@supabase/supabase-js`
-- [ ] **0.8** Crear `lib/db.ts` con cliente exportado
-- [ ] **0.9** Crear cuenta Anthropic y obtener API key
-- [ ] **0.10** Instalar `@anthropic-ai/sdk` y crear `lib/claude.ts` con función `callClaude()`
-- [ ] **0.11** Test: API route `/api/health` que llama a Claude y devuelve respuesta
+- [x] **0.6** Crear proyecto en Firebase (Firestore + Auth) o Supabase
+- [x] **0.7** Instalar SDK correspondiente: `firebase` o `@supabase/supabase-js`
+- [x] **0.8** Crear `lib/db.ts` con cliente exportado
+- [x] **0.9** Crear cuenta Gemini y obtener API key
+- [x] **0.10** Instalar `@google/genai` y crear `lib/gemini.ts` con función `callGemini()`
+- [x] **0.11** Test: API route `/api/health` que llama a Claude y devuelve respuesta
 
 ### Deploy inicial
 
