@@ -58,11 +58,13 @@ export default function CampaignDetailPage() {
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [allChars, setAllChars] = useState<Character[]>([]);
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -73,9 +75,10 @@ export default function CampaignDetailPage() {
         return;
       }
 
-      const [campRes, charsRes] = await Promise.all([
+      const [campRes, charsRes, allCampsRes] = await Promise.all([
         fetch(`/api/campaigns/${id}`),
         fetch("/api/characters"),
+        fetch("/api/campaigns"),
       ]);
 
       if (!campRes.ok) {
@@ -85,15 +88,19 @@ export default function CampaignDetailPage() {
         return;
       }
 
-      const [camp, chars] = await Promise.all([
+      const [camp, chars, camps] = await Promise.all([
         campRes.json() as Promise<CampaignDetail>,
         charsRes.ok
           ? (charsRes.json() as Promise<Character[]>)
+          : Promise.resolve([]),
+        allCampsRes.ok
+          ? (allCampsRes.json() as Promise<Campaign[]>)
           : Promise.resolve([]),
       ]);
 
       setCampaign(camp);
       setAllChars(chars);
+      setAllCampaigns(camps);
       loader.stop();
       setLoading(false);
     });
@@ -115,22 +122,31 @@ export default function CampaignDetailPage() {
       if (!campaign || pending) return;
       setPending(charId);
       setDropOpen(false);
+      setAddError(null);
 
-      const res = await fetch(`/api/campaigns/${campaign.id}/characters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character_id: charId }),
-      });
+      try {
+        const res = await fetch(`/api/campaigns/${campaign.id}/characters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ character_id: charId }),
+        });
 
-      if (res.ok) {
-        const char = allChars.find((c) => c.id === charId);
-        if (char) {
-          setCampaign((prev) =>
-            prev ? { ...prev, characters: [...prev.characters, char] } : prev,
-          );
+        if (res.ok) {
+          const char = allChars.find((c) => c.id === charId);
+          if (char) {
+            setCampaign((prev) =>
+              prev ? { ...prev, characters: [...prev.characters, char] } : prev,
+            );
+          }
+        } else {
+          const data = await res.json().catch(() => ({})) as { error?: string };
+          setAddError(data.error ?? "Error al agregar el personaje.");
         }
+      } catch {
+        setAddError("Error de conexión. Inténtalo de nuevo.");
+      } finally {
+        setPending(null);
       }
-      setPending(null);
     },
     [campaign, allChars, pending],
   );
@@ -166,19 +182,17 @@ export default function CampaignDetailPage() {
     if (!campaign || starting) return;
     setStarting(true);
 
-    const res = await fetch(`/api/campaigns/${campaign.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ started_at: new Date().toISOString() }),
-    });
-
-    if (res.ok) {
-      const updated = (await res.json()) as { started_at: string };
-      setCampaign((prev) =>
-        prev ? { ...prev, started_at: updated.started_at } : prev,
-      );
+    if (!isStarted) {
+      const res = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ started_at: new Date().toISOString() }),
+      });
+      if (!res.ok) { setStarting(false); return; }
     }
-    setStarting(false);
+
+    loader.start();
+    router.push(`/campaigns/${campaign.id}/play`);
   }
 
   // ── Loading ──────────────────────────────────────────────────
@@ -251,7 +265,17 @@ export default function CampaignDetailPage() {
 
   const party = campaign.characters;
   const partyIds = new Set(party.map((c) => c.id));
-  const available = allChars.filter((c) => !partyIds.has(c.id));
+
+  // Characters locked in another campaign that is already underway.
+  const busyCharIds = new Set(
+    allCampaigns
+      .filter((c) => c.id !== campaign.id && c.started_at !== null)
+      .flatMap((c) => c.character_ids ?? []),
+  );
+
+  const available = allChars.filter(
+    (c) => !partyIds.has(c.id) && !busyCharIds.has(c.id),
+  );
   const emptySlots = MAX_PARTY - party.length;
   const isStarted = campaign.started_at !== null;
 
@@ -364,6 +388,22 @@ export default function CampaignDetailPage() {
             </span>
           </div>
 
+          {addError && (
+            <div className={s.addError} role="alert">
+              <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden style={{ flexShrink: 0 }}>
+                <path d="M7 1.5L13 12.5H1L7 1.5Z" fill="none" stroke="#d07070" strokeWidth="1.3" strokeLinejoin="round" />
+                <line x1="7" y1="6" x2="7" y2="9" stroke="#d07070" strokeWidth="1.3" strokeLinecap="round" />
+                <circle cx="7" cy="10.5" r="0.7" fill="#d07070" />
+              </svg>
+              <span>{addError}</span>
+              <button
+                className={s.addErrorClose}
+                onClick={() => setAddError(null)}
+                type="button"
+              >✕</button>
+            </div>
+          )}
+
           <div className={s.slots}>
             {/* Filled slots */}
             {party.map((char) => {
@@ -471,7 +511,9 @@ export default function CampaignDetailPage() {
                           <div className={s.dropEmpty}>
                             {allChars.length === 0
                               ? "No tienes personajes creados."
-                              : "Todos tus personajes ya están en el grupo."}
+                              : busyCharIds.size > 0
+                                ? "Todos tus personajes libres ya están en este grupo."
+                                : "Todos tus personajes ya están en el grupo."}
                           </div>
                         ) : (
                           available.map((c) => (
