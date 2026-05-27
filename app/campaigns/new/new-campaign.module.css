@@ -1,0 +1,434 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* ── Layout ──────────────────────────────────────────────────── */
+
+.page {
+  min-height: 100vh;
+  background: #07040a;
+  background-image:
+    radial-gradient(ellipse 70% 50% at 10% 0%,  rgba(30,10,50,0.8) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(10,20,50,0.7) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 50% 50%,  rgba(20,8,8,0.4)  0%, transparent 70%);
+  color: #e0cc90;
+  font-family: 'Crimson Text', 'Palatino Linotype', Georgia, serif;
+}
+
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.8) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,0.5) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,220,0.3) 1.5px, transparent 1.5px);
+  background-size: 200px 200px, 140px 140px, 280px 280px;
+  background-position: 0 0, 70px 100px, 150px 50px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+
+/* ── Back link ───────────────────────────────────────────────── */
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.back:hover { color: #c9a030; }
+
+/* ── Main card ───────────────────────────────────────────────── */
+
+.card {
+  background: linear-gradient(160deg, #1e1308 0%, #160e06 100%);
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px #7a5c1e,
+    0 0 0 3px #1a1008,
+    0 0 0 4px #7a5c1e,
+    0 16px 48px rgba(0,0,0,0.7);
+}
+
+.borderTop {
+  height: 4px;
+  background: linear-gradient(90deg, #3a2808, #b8860b, #e8c040, #b8860b, #3a2808);
+  border-radius: 4px 4px 0 0;
+}
+
+.borderBottom {
+  height: 3px;
+  background: linear-gradient(90deg, #3a2808, #7a5c1e, #b8860b, #7a5c1e, #3a2808);
+  border-radius: 0 0 4px 4px;
+}
+
+.cardBody {
+  padding: 44px 52px;
+}
+
+@keyframes cardShake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-5px); }
+  30%  { transform: translateX(5px); }
+  45%  { transform: translateX(-4px); }
+  60%  { transform: translateX(4px); }
+  75%  { transform: translateX(-2px); }
+  90%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+.cardShake { animation: cardShake 0.45s ease; }
+
+/* ── Header ──────────────────────────────────────────────────── */
+
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.emblem {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+  opacity: 0.85;
+}
+
+.title {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #e8c040;
+  text-shadow: 0 0 30px rgba(232,192,64,0.4);
+  margin: 0 0 8px;
+  letter-spacing: 0.04em;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: #6b5535;
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Form sections ───────────────────────────────────────────── */
+
+.section {
+  margin-bottom: 28px;
+}
+
+.label {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c9a030;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.labelOptional {
+  font-family: 'Crimson Text', serif;
+  font-size: 13px;
+  color: #4a3510;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-style: italic;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #e0cc90;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 16px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input::placeholder { color: #3a2808; }
+
+.input:focus {
+  border-color: #7a5c1e;
+  box-shadow: 0 0 0 2px rgba(184,134,11,0.15);
+}
+
+.inputError { border-color: #7a2020 !important; }
+.inputError:focus { box-shadow: 0 0 0 2px rgba(122,32,32,0.2) !important; }
+
+/* ── Setting grid ────────────────────────────────────────────── */
+
+.settingGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.settingCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 16px 8px 14px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  font-family: inherit;
+  outline: none;
+}
+
+.settingCard:hover {
+  border-color: #7a5c1e;
+  background: rgba(184,134,11,0.05);
+}
+
+.settingCard:focus-visible {
+  outline: 2px solid #b8860b;
+  outline-offset: 2px;
+}
+
+.settingCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+  box-shadow: 0 0 14px rgba(184,134,11,0.2), inset 0 0 0 1px rgba(232,192,64,0.08);
+}
+
+.settingCardIcon { opacity: 0.75; transition: opacity 0.2s; }
+.settingCardSelected .settingCardIcon { opacity: 1; }
+
+.settingCardLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: #6b5535;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+  line-height: 1.3;
+}
+
+.settingCardSelected .settingCardLabel { color: #e8c040; }
+
+.settingCardDesc {
+  font-size: 10px;
+  color: #3a2808;
+  font-style: italic;
+  line-height: 1.4;
+  transition: color 0.2s;
+}
+
+.settingCardSelected .settingCardDesc { color: #6b5535; }
+
+/* ── Tone row ────────────────────────────────────────────────── */
+
+.toneRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toneBtn {
+  padding: 9px 20px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.toneBtn:hover {
+  border-color: #7a5c1e;
+  color: #c9a030;
+  background: rgba(184,134,11,0.04);
+}
+
+.toneBtn:focus-visible {
+  outline: 2px solid #b8860b;
+  outline-offset: 2px;
+}
+
+.toneBtnSelected {
+  border-color: #b8860b !important;
+  color: #e8c040 !important;
+  background: rgba(184,134,11,0.12) !important;
+  box-shadow: 0 0 10px rgba(184,134,11,0.15);
+}
+
+/* ── Textarea ────────────────────────────────────────────────── */
+
+.textarea {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #e0cc90;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 15px;
+  line-height: 1.65;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.textarea::placeholder { color: #3a2808; }
+
+.textarea:focus {
+  border-color: #7a5c1e;
+  box-shadow: 0 0 0 2px rgba(184,134,11,0.15);
+}
+
+/* ── Errors ──────────────────────────────────────────────────── */
+
+.fieldError {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 13px;
+  color: #d07070;
+}
+
+@keyframes errorFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(80,20,20,0.4);
+  border: 1px solid #7a2020;
+  border-radius: 2px;
+  color: #d07070;
+  font-size: 14px;
+  font-style: italic;
+  margin-bottom: 22px;
+  animation: errorFadeIn 0.3s ease;
+}
+
+/* ── Actions ─────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.btnPrimary {
+  padding: 13px 30px;
+  background: linear-gradient(135deg, #7a5c1e 0%, #4a3510 100%);
+  border: 1px solid #b8860b;
+  border-radius: 2px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9a7c2e 0%, #6a5020 100%);
+  box-shadow: 0 0 22px rgba(184,134,11,0.35);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  padding: 13px 20px;
+  background: transparent;
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #6b5535;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: #7a5c1e;
+  color: #c9a030;
+}
+
+.btnSecondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Loading skeleton ────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0.4; }
+}
+
+.skeleton {
+  animation: shimmer 1.8s ease-in-out infinite;
+  background: #2a1e10;
+  border-radius: 2px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+
+@media (max-width: 680px) {
+  .cardBody { padding: 28px 24px; }
+  .title { font-size: 19px; }
+
+  .settingGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .settingGrid .settingCard:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .actions { flex-direction: column-reverse; }
+  .btnPrimary, .btnSecondary { text-align: center; }
+}

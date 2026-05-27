@@ -1,0 +1,610 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* ── Layout ──────────────────────────────────────────────────── */
+
+.page {
+  min-height: 100vh;
+  background: #07040a;
+  background-image:
+    radial-gradient(ellipse 70% 50% at 10% 0%,  rgba(30,10,50,0.8) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(10,20,50,0.7) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 50% 50%,  rgba(20,8,8,0.4)  0%, transparent 70%);
+  color: #e0cc90;
+  font-family: 'Crimson Text', 'Palatino Linotype', Georgia, serif;
+}
+
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.8) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,0.5) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,220,0.3) 1.5px, transparent 1.5px);
+  background-size: 200px 200px, 140px 140px, 280px 280px;
+  background-position: 0 0, 70px 100px, 150px 50px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+}
+
+/* ── Topbar ──────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.2);
+  margin-bottom: 40px;
+}
+
+.topbarLogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbarTitle {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #e8c040;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(232,192,64,0.3);
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.userBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(232,192,64,0.06);
+  border: 1px solid rgba(184,134,11,0.25);
+  border-radius: 2px;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7a1010, #3a0606);
+  border: 1px solid #b8860b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8c040;
+  flex-shrink: 0;
+}
+
+.userName {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  color: #c9a030;
+  letter-spacing: 0.08em;
+}
+
+.btnLogout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #6b5535;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnLogout:hover {
+  border-color: #7a5c1e;
+  color: #c9a030;
+  background: rgba(184,134,11,0.04);
+}
+
+.btnLogout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Welcome banner ──────────────────────────────────────────── */
+
+.welcome {
+  margin-bottom: 36px;
+}
+
+.welcomeScroll {
+  position: relative;
+  padding: 24px 32px;
+  background: linear-gradient(160deg, #1e1308 0%, #160e06 100%);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px #7a5c1e,
+    0 0 0 3px #1a1008,
+    0 0 0 4px #7a5c1e,
+    0 12px 40px rgba(0,0,0,0.6);
+}
+
+.welcomeScrollTop {
+  height: 4px;
+  background: linear-gradient(90deg, #3a2808, #b8860b, #e8c040, #b8860b, #3a2808);
+  border-radius: 3px 3px 0 0;
+  position: absolute;
+  top: 0; left: 0; right: 0;
+}
+
+.welcomeScrollBottom {
+  height: 3px;
+  background: linear-gradient(90deg, #3a2808, #7a5c1e, #b8860b, #7a5c1e, #3a2808);
+  border-radius: 0 0 3px 3px;
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+}
+
+.welcomeGreeting {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #e8c040;
+  text-shadow: 0 0 24px rgba(232,192,64,0.35);
+  margin-bottom: 6px;
+}
+
+.welcomeSub {
+  font-size: 15px;
+  color: #8b7355;
+  font-style: italic;
+}
+
+/* ── Stat cards ──────────────────────────────────────────────── */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.statCard {
+  position: relative;
+  padding: 20px 22px;
+  background: linear-gradient(160deg, #1a1208 0%, #110c06 100%);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px #4a3510,
+    0 8px 24px rgba(0,0,0,0.5);
+  transition: box-shadow 0.2s, transform 0.2s;
+  overflow: hidden;
+}
+
+.statCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b8860b, transparent);
+}
+
+.statCard:hover {
+  box-shadow:
+    0 0 0 1px #7a5c1e,
+    0 12px 32px rgba(0,0,0,0.6),
+    0 0 20px rgba(184,134,11,0.08);
+  transform: translateY(-2px);
+}
+
+.statIcon {
+  margin-bottom: 14px;
+  opacity: 0.8;
+}
+
+.statValue {
+  font-family: 'Cinzel', serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #e8c040;
+  line-height: 1;
+  margin-bottom: 6px;
+  text-shadow: 0 0 16px rgba(232,192,64,0.25);
+}
+
+.statLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b5535;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ── Section title ───────────────────────────────────────────── */
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9a030;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.sectionTitle::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, #7a5c1e, transparent);
+}
+
+/* ── Quick actions ───────────────────────────────────────────── */
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 36px;
+}
+
+.actionCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.actionCard:hover {
+  border-color: #7a5c1e;
+  background: rgba(184,134,11,0.05);
+  transform: translateY(-1px);
+}
+
+.actionCardIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(184,134,11,0.08);
+  border: 1px solid #3e2e10;
+}
+
+.actionCardText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.actionCardTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c9a030;
+  letter-spacing: 0.08em;
+}
+
+.actionCardSub {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+}
+
+/* ── Activity feed ───────────────────────────────────────────── */
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #1e1608;
+  border-radius: 2px;
+  font-size: 14px;
+  color: #6b5535;
+  font-style: italic;
+}
+
+.activityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4a3510;
+  flex-shrink: 0;
+}
+
+/* ── Campaign cards ──────────────────────────────────────────── */
+
+.campaignGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.campaignCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: linear-gradient(160deg, #1a1208 0%, #110c06 100%);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px #3a2808,
+    0 6px 20px rgba(0,0,0,0.5);
+  transition: box-shadow 0.2s, transform 0.2s;
+  overflow: hidden;
+}
+
+.campaignCard:hover {
+  box-shadow:
+    0 0 0 1px #7a5c1e,
+    0 10px 28px rgba(0,0,0,0.6),
+    0 0 16px rgba(184,134,11,0.06);
+  transform: translateY(-2px);
+}
+
+.campaignCardActive {
+  box-shadow:
+    0 0 0 1px #3a6a3a,
+    0 6px 20px rgba(0,0,0,0.5);
+}
+.campaignCardActive:hover {
+  box-shadow:
+    0 0 0 1px #5a9a5a,
+    0 10px 28px rgba(0,0,0,0.6),
+    0 0 16px rgba(90,160,90,0.08);
+}
+
+.campaignCardTop {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b8860b, transparent);
+}
+
+.campaignInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.campaignName {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0cc90;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+
+.campaignMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: rgba(58,40,8,0.6);
+  border: 1px solid #4a3510;
+  color: #8b6b35;
+}
+
+/* Status badges */
+.badgeActive  { background: rgba(20,60,20,0.5);  border-color: #3a6a3a;  color: #6aaa70; }
+.badgePending { background: rgba(30,22,8,0.5);   border-color: #3a2808;  color: #5c4828; }
+
+/* Setting-specific badge colors */
+.badge_fantasy   { background: rgba(20,50,20,0.5);  border-color: #2a4a2a;  color: #6a9a5a; }
+.badge_scifi     { background: rgba(15,30,60,0.5);  border-color: #1e3a6e;  color: #5a8abf; }
+.badge_horror    { background: rgba(60,15,15,0.5);  border-color: #5a1e1e;  color: #a05050; }
+.badge_cyberpunk { background: rgba(40,15,60,0.5);  border-color: #4a1e7a;  color: #8a5abf; }
+.badge_custom    { background: rgba(50,35,10,0.5);  border-color: #5a4010;  color: #a08040; }
+
+.campaignDate {
+  font-size: 11px;
+  color: #3a2808;
+  font-style: italic;
+  margin-top: 6px;
+}
+
+.campaignCardActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btnPlay {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #6b5535;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btnPlay:hover {
+  border-color: #b8860b;
+  color: #e8c040;
+  background: rgba(184,134,11,0.06);
+}
+
+.btnDelete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  background: transparent;
+  border: 1px solid #2e1e10;
+  border-radius: 2px;
+  color: #4a2e18;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.btnDelete:hover:not(:disabled) {
+  border-color: #8a2020;
+  color: #c06060;
+  background: rgba(100,20,20,0.12);
+}
+.btnDelete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btnDeleteConfirm {
+  border-color: #8a2020 !important;
+  color: #c06060 !important;
+  background: rgba(100,20,20,0.12) !important;
+}
+.btnDeleteConfirm:hover:not(:disabled) {
+  border-color: #c03030 !important;
+  color: #e08080 !important;
+  background: rgba(140,30,30,0.2) !important;
+}
+
+/* Empty state */
+.campaignEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 24px;
+  border: 1px dashed #2e2010;
+  border-radius: 3px;
+  text-align: center;
+  color: #4a3510;
+  font-size: 14px;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.campaignEmpty p { margin: 0; line-height: 1.6; }
+
+.btnNewCampaign {
+  margin-top: 4px;
+  padding: 10px 22px;
+  background: linear-gradient(135deg, #7a5c1e 0%, #4a3510 100%);
+  border: 1px solid #b8860b;
+  border-radius: 2px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnNewCampaign:hover {
+  background: linear-gradient(135deg, #9a7c2e 0%, #6a5020 100%);
+  box-shadow: 0 0 18px rgba(184,134,11,0.3);
+}
+
+/* ── Character HP bar ────────────────────────────────────────── */
+
+.charHpRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.charHpBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.charHpFill {
+  height: 100%;
+  background: linear-gradient(90deg, #7a5c1e, #b8860b);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.charHpText {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  color: #5c4828;
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0.4; }
+}
+
+.skeleton {
+  animation: shimmer 1.8s ease-in-out infinite;
+  background: #2a1e10;
+  border-radius: 2px;
+}
