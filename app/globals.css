@@ -1,0 +1,76 @@
+/* ── Global loader overlay ───────────────────────────────────── */
+
+@keyframes g-spin-cw {
+  to { transform: rotate(360deg); }
+}
+@keyframes g-spin-ccw {
+  to { transform: rotate(-360deg); }
+}
+@keyframes g-pulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1);   }
+  50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.3); }
+}
+
+.g-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 4, 10, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.g-overlay[data-fading="true"] {
+  opacity: 0;
+}
+
+/* Spinner wrapper */
+.g-spinner {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+/* Outer rotating ring */
+.g-spinner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #e8c040;
+  border-right-color: #b8860b;
+  box-shadow: 0 0 14px rgba(232, 192, 64, 0.35);
+  animation: g-spin-cw 0.9s linear infinite;
+}
+
+/* Inner counter-rotating ring */
+.g-spinner::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-bottom-color: #7a5c1e;
+  border-left-color: #4a3510;
+  animation: g-spin-ccw 1.4s linear infinite;
+}
+
+/* Pulsing center dot */
+.g-spinner-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e8c040;
+  box-shadow: 0 0 10px rgba(232, 192, 64, 0.7);
+  animation: g-pulse 1.4s ease-in-out infinite;
+}
