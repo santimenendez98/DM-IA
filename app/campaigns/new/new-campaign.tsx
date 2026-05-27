@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Setting, Tone } from "@/types/union_types";
 import { FieldError } from "@/components/FieldError";
 import { cx } from "@/components/cx";
@@ -152,6 +153,7 @@ export default function NewCampaign() {
   useEffect(() => {
     getCurrUser().then((u) => {
       if (!u) { router.replace("/auth/login"); return; }
+      loader.stop();
       setAuthLoading(false);
     });
   }, [router]);

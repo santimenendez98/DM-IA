@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Character } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import { cx } from "@/components/cx";
@@ -78,6 +79,7 @@ export default function CampaignDetailPage() {
       ]);
 
       if (!campRes.ok) {
+        loader.stop();
         setNotFound(true);
         setLoading(false);
         return;
@@ -92,6 +94,7 @@ export default function CampaignDetailPage() {
 
       setCampaign(camp);
       setAllChars(chars);
+      loader.stop();
       setLoading(false);
     });
   }, [id, router]);

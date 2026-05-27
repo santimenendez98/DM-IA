@@ -1,8 +1,9 @@
 "use client";
 
 import { signUp } from "@/lib/auth";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { loader } from "@/lib/loader";
 
 import s from "./signup.module.css";
 import { SignupErrors } from "@/types/signup";
@@ -38,6 +39,8 @@ export default function Signup() {
   const [errors, setErrors] = useState<SignupErrors>({});
   const [shake, setShake] = useState(false);
   const router = useRouter();
+
+  useEffect(() => { loader.stop(); }, []);
 
   const strength = passwordStrength(password);
 

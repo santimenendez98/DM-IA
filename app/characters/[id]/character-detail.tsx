@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Character, CharacterStats } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import { cx } from "@/components/cx";
@@ -91,7 +92,7 @@ export default function CharacterDetail() {
         fetch("/api/campaigns"),
       ]);
 
-      if (!charRes.ok) { setNotFound(true); setLoading(false); return; }
+      if (!charRes.ok) { loader.stop(); setNotFound(true); setLoading(false); return; }
 
       const [char, camps] = await Promise.all([
         charRes.json() as Promise<Character>,
@@ -100,6 +101,7 @@ export default function CharacterDetail() {
 
       setCharacter(char);
       setCampaigns(camps);
+      loader.stop();
       setLoading(false);
     });
   }, [id, router]);

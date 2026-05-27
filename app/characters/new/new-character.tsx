@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { CharacterStats } from "@/types/character";
 import { FieldError } from "@/components/FieldError";
 import { cx } from "@/components/cx";
@@ -273,6 +274,7 @@ export default function NewCharacter() {
   useEffect(() => {
     getCurrUser().then((u) => {
       if (!u) { router.replace("/auth/login"); return; }
+      loader.stop();
       setAuthLoading(false);
     });
   }, [router]);

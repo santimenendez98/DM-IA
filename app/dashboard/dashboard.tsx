@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getCurrUser, signOut } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Campaign } from "@/types/campaing";
 import type { Character } from "@/types/character";
 import { cx } from "@/components/cx";
@@ -181,6 +182,7 @@ export default function Dashboard() {
         if (campaignsRes.ok)   setCampaigns(await campaignsRes.json());
         if (charactersRes.ok)  setCharacters(await charactersRes.json());
       } catch { /* ignore — data stays empty */ }
+      loader.stop();
       setLoading(false);
     });
   }, [router]);
