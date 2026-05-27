@@ -10,7 +10,7 @@ import { loader } from "@/lib/loader";
 
 function Overlay() {
   const ref   = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const el = ref.current;
