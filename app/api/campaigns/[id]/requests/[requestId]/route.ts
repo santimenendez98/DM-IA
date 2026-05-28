@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
 
 const MAX_PARTY = 4;
 
@@ -109,7 +110,17 @@ export async function PATCH(
         }
       }
     }
+
+    broadcastToChannel(`lobby:${campaignId}`,    "player_joined", { campaign_id: campaignId });
+    broadcastToChannel(`campaign:${campaignId}`, "party_changed", { campaign_id: campaignId });
   }
+
+  broadcastToChannel(`campaign:${campaignId}`, "request_updated", { id: requestId, status });
+  broadcastToChannel(
+    `user-${request.requester_id as string}`,
+    "request_decision",
+    { campaign_id: campaignId, status },
+  );
 
   return NextResponse.json({ status });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
 
 const MAX_PARTY = 4;
 
@@ -85,6 +86,9 @@ export async function POST(req: NextRequest) {
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
+
+  broadcastToChannel(`lobby:${campaign.id}`,    "player_joined", { campaign_id: campaign.id });
+  broadcastToChannel(`campaign:${campaign.id}`, "party_changed", { campaign_id: campaign.id });
 
   return NextResponse.json({
     campaign_id: campaign.id,

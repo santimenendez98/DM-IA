@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
 
 // ── DELETE /api/campaigns/[id]/characters/[charId] ────────────
 // Removes a character from the campaign party.
@@ -33,6 +35,14 @@ export async function DELETE(
     );
   }
 
+  // Fetch character owner before deletion so we can notify them.
+  const admin = createAdminClient();
+  const { data: expelledChar } = await admin
+    .from("characters")
+    .select("user_id")
+    .eq("id", charId)
+    .single();
+
   const { error } = await supabase
     .from("campaign_characters")
     .delete()
@@ -42,6 +52,15 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  if (expelledChar) {
+    broadcastToChannel(`lobby:${campaignId}`, "player_expelled", {
+      character_id: charId,
+      user_id: expelledChar.user_id as string,
+    });
+  }
+  broadcastToChannel(`campaign:${campaignId}`, "party_changed", { campaign_id: campaignId });
+  broadcastToChannel(`lobby:${campaignId}`,    "party_changed", { campaign_id: campaignId });
 
   return new NextResponse(null, { status: 204 });
 }

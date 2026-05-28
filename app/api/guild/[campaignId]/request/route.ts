@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
 
 // ── POST /api/guild/[campaignId]/request ───────────────────────
 // Sends a join request to the campaign owner.
@@ -98,6 +99,9 @@ export async function POST(
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  broadcastToChannel(`campaign:${campaignId}`, "request_created", { ...data });
+  broadcastToChannel(`user-${campaign.user_id as string}`, "request_created", { ...data });
 
   return NextResponse.json(data, { status: 201 });
 }

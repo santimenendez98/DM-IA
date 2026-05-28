@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getCurrUser, signOut } from "@/lib/auth";
 import { loader } from "@/lib/loader";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Campaign } from "@/types/campaing";
 import type { Character } from "@/types/character";
 import type { JoinRequest } from "@/types/join-request";
@@ -219,6 +220,32 @@ export default function Dashboard() {
     });
   }, [router]);
 
+  // Real-time: listen for events on the user's personal channel.
+  useEffect(() => {
+    if (!user) return;
+
+    const supabase = createSupabaseClient();
+    const channel = supabase
+      .channel(`user-${user.id}`)
+      .on("broadcast", { event: "request_created" }, async () => {
+        const res = await fetch("/api/campaigns/requests", { cache: "no-store" });
+        if (res.ok) setPendingRequests(await res.json());
+      })
+      .on("broadcast", { event: "request_decision" }, async () => {
+        const res = await fetch("/api/campaigns/joined", { cache: "no-store" });
+        if (res.ok) setJoinedCampaigns(await res.json());
+      })
+      .on("broadcast", { event: "campaign_started" }, ({ payload }) => {
+        const { campaign_id, started_at } = payload as { campaign_id: string; started_at: string };
+        setJoinedCampaigns((prev) =>
+          prev.map((c) => (c.id === campaign_id ? { ...c, started_at } : c)),
+        );
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   async function deleteCampaign(id: string) {
     setDeletingId(id);
     setConfirmDelete(null);
@@ -228,6 +255,11 @@ export default function Dashboard() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  async function handleJoined() {
+    const res = await fetch("/api/campaigns/joined");
+    if (res.ok) setJoinedCampaigns(await res.json());
   }
 
   async function handleLogout() {
@@ -643,7 +675,7 @@ export default function Dashboard() {
       </div>
 
       <GuildExplorer open={guildOpen} onClose={() => setGuildOpen(false)} />
-      <JoinByCode open={joinCodeOpen} onClose={() => setJoinCodeOpen(false)} />
+      <JoinByCode open={joinCodeOpen} onClose={() => setJoinCodeOpen(false)} onJoined={handleJoined} />
     </div>
   );
 }

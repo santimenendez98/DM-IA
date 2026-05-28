@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
 import { callGeminiDM } from "@/lib/gemini";
 import type { Character } from "@/types/character";
 
@@ -258,6 +259,8 @@ export async function POST(
       return NextResponse.json({ error: dmErr.message }, { status: 500 });
     }
 
+    broadcastToChannel(`play:${campaignId}`, "dm_response", { ...dmMsg, character_name: null });
+
     return NextResponse.json(
       { dm_response: { ...dmMsg, character_name: null } },
       { status: 201 },
@@ -333,9 +336,13 @@ export async function POST(
 
   const charMsgFlat = flattenMessage(charMsg as Record<string, unknown>);
 
+  broadcastToChannel(`play:${campaignId}`, "new_message", charMsgFlat);
+
   if (!invoke_dm) {
     return NextResponse.json({ message: charMsgFlat }, { status: 201 });
   }
+
+  broadcastToChannel(`play:${campaignId}`, "dm_thinking", {});
 
   // ── Invoke Gemini DM ───────────────────────────────────────
 
@@ -404,9 +411,10 @@ export async function POST(
 
   if (dmInsertError) {
     console.error("DM insert error:", dmInsertError);
-    // Return the character message even if DM save failed
     return NextResponse.json({ message: charMsgFlat }, { status: 201 });
   }
+
+  broadcastToChannel(`play:${campaignId}`, "dm_response", { ...dmMsg, character_name: null });
 
   return NextResponse.json(
     {

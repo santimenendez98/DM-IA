@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
 import { cx } from "@/components/cx";
 import s from "./lobby.module.css";
@@ -56,10 +57,31 @@ export default function Lobby() {
   const [notFound, setNotFound] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [dmAbandoned, setDmAbandoned] = useState(false);
+  const [expelled, setExpelled] = useState(false);
+  const [campaignDeleted, setCampaignDeleted] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  // Keep a ref so Realtime callbacks always see the latest values
+  const campaignRef = useRef<LobbyData | null>(null);
+  const userIdRef   = useRef<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef  = useRef<any>(null);
+  useEffect(() => { campaignRef.current = campaign; }, [campaign]);
+  useEffect(() => { userIdRef.current = userId; },     [userId]);
 
-  // Initial load
+  // ── Redirect non-DM players when campaign starts ─────────────
+  // Works via state update (triggered by Realtime or Broadcast); no polling needed.
+  useEffect(() => {
+    if (!campaign || !userId || loading) return;
+    if (campaign.user_id !== userId && campaign.started_at) {
+      sessionStorage.setItem(`play_auth_${campaign.id}`, "1");
+      loader.start();
+      router.replace(`/campaigns/${campaign.id}/play`);
+    }
+  }, [campaign, userId, loading, router]);
+
+  // ── Initial load ─────────────────────────────────────────────
+
   useEffect(() => {
     getCurrUser().then(async (u) => {
       if (!u) { router.replace("/auth/login"); return; }
@@ -68,52 +90,118 @@ export default function Lobby() {
       const res = await fetch(`/api/campaigns/${id}`);
       if (!res.ok) { setNotFound(true); setLoading(false); loader.stop(); return; }
 
-      const camp = await res.json() as LobbyData;
+      const raw = await res.json() as LobbyData;
+      let camp = raw;
+
+      // If the DM returns to the lobby while started_at is still set (e.g. after
+      // an unexpected disconnect), reset it so players see the waiting state.
+      if (raw.user_id === u.id && raw.started_at) {
+        fetch(`/api/campaigns/${raw.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ started_at: null }),
+        }).catch(() => {});
+        camp = { ...raw, started_at: null };
+      }
+
       setCampaign(camp);
       loader.stop();
       setLoading(false);
     });
   }, [id, router]);
 
-  // Polling: players auto-redirect when DM starts the session
+  // ── Realtime channel ─────────────────────────────────────────
+
   useEffect(() => {
     if (loading || !campaign || !userId) return;
 
     const isDM = campaign.user_id === userId;
+    const supabase = createClient();
 
-    // Non-owner already in a started campaign → go straight to play
-    if (!isDM && campaign.started_at) {
-      loader.start();
-      router.replace(`/campaigns/${id}/play`);
-      return;
-    }
+    const channel = supabase.channel(`lobby:${campaign.id}`, {
+      config: { presence: { key: userId } },
+    });
+    channelRef.current = channel;
 
-    if (!isDM) {
-      pollRef.current = setInterval(async () => {
-        const res = await fetch(`/api/campaigns/${id}`);
-        if (!res.ok) return;
-        const data = await res.json() as LobbyData;
-        if (data.started_at) {
-          clearInterval(pollRef.current);
-          loader.start();
-          router.push(`/campaigns/${id}/play`);
-        } else {
-          // Refresh party list so newcomers appear
-          setCampaign(data);
-        }
-      }, 4000);
-    } else {
-      // DM also refreshes the party list while waiting
-      pollRef.current = setInterval(async () => {
-        const res = await fetch(`/api/campaigns/${id}`);
-        if (!res.ok) return;
-        const data = await res.json() as LobbyData;
-        setCampaign(data);
-      }, 5000);
-    }
+    const refetchParty = async () => {
+      const cid = campaignRef.current?.id;
+      if (!cid) return;
+      const res = await fetch(`/api/campaigns/${cid}`, { cache: "no-store" });
+      if (res.ok) setCampaign(await res.json() as LobbyData);
+    };
 
-    return () => clearInterval(pollRef.current);
-  }, [loading, campaign?.user_id, userId, id, router]); // eslint-disable-line react-hooks/exhaustive-deps
+    channel
+      // ── Presence: someone entered the lobby ───────────────────
+      .on("presence", { event: "join" }, ({ newPresences }) => {
+        const hasOther = newPresences.some(
+          (p) => (p as { user_id?: string }).user_id !== userIdRef.current,
+        );
+        if (hasOther) refetchParty();
+      })
+      // ── Broadcast: player joined or party changed ─────────────
+      .on("broadcast", { event: "player_joined" }, () => refetchParty())
+      .on("broadcast", { event: "party_changed"  }, () => refetchParty())
+      // ── Broadcast: player expelled ────────────────────────────
+      .on("broadcast", { event: "player_expelled" }, ({ payload }) => {
+        const p = payload as { user_id: string };
+        if (p.user_id === userIdRef.current) setExpelled(true);
+        else refetchParty();
+      })
+      // ── Broadcast: campaign deleted ───────────────────────────
+      .on("broadcast", { event: "campaign_deleted" }, () => {
+        if (userIdRef.current !== campaignRef.current?.user_id) setCampaignDeleted(true);
+      })
+      // ── Postgres Changes: new player joined (fallback) ────────
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "campaign_characters",
+          filter: `campaign_id=eq.${campaign.id}` },
+        () => refetchParty(),
+      )
+      // ── Campaign started (started_at set) ─────────────────────
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "campaigns",
+          filter: `id=eq.${campaign.id}` },
+        (payload) => {
+          const updated = payload.new as Partial<LobbyData>;
+          setCampaign((prev) => prev ? { ...prev, ...updated } : prev);
+          if (updated.started_at && userIdRef.current !== campaignRef.current?.user_id) {
+            sessionStorage.setItem(`play_auth_${campaign.id}`, "1");
+            loader.start();
+            router.push(`/campaigns/${campaign.id}/play`);
+          }
+        },
+      )
+      // ── DM broadcast: session started ────────────────────────
+      .on("broadcast", { event: "session_started" }, () => {
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+        sessionStorage.setItem(`play_auth_${camp.id}`, "1");
+        loader.start();
+        router.replace(`/campaigns/${camp.id}/play`);
+      })
+      // ── Presence: DM left lobby ───────────────────────────────
+      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+        const uid = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+
+        const dmLeft = leftPresences.some(
+          (p) => (p as { role?: string }).role === "dm",
+        );
+        if (dmLeft && !camp.started_at) setDmAbandoned(true);
+      })
+      .subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") return;
+        await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
+      });
+
+    return () => { channelRef.current = null; supabase.removeChannel(channel); };
+  }, [loading, userId, campaign?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Start handler ─────────────────────────────────────────────
 
   async function handleStart() {
     if (!campaign || starting) return;
@@ -134,11 +222,21 @@ export default function Lobby() {
       }
     }
 
+    // Notify all players via WebSocket before navigating
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: "broadcast",
+        event: "session_started",
+        payload: {},
+      });
+    }
+
+    sessionStorage.setItem(`play_auth_${id}`, "1");
     loader.start();
     router.push(`/campaigns/${id}/play`);
   }
 
-  // ── Loading ──────────────────────────────────────────────────────
+  // ── Loading / not found ───────────────────────────────────────
 
   if (loading) {
     return (
@@ -168,11 +266,85 @@ export default function Lobby() {
 
   const isDM = campaign.user_id === userId;
 
-  // ── JSX ────────────────────────────────────────────────────────
+  // ── JSX ───────────────────────────────────────────────────────
 
   return (
     <div className={s.page}>
       <div className={s.stars} aria-hidden />
+
+      {/* DM abandoned overlay */}
+      {dmAbandoned && (
+        <div className={s.abandonedOverlay}>
+          <div className={s.abandonedCard}>
+            <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
+              <circle cx="18" cy="18" r="15" fill="none" stroke="#b84a4a" strokeWidth="1.5" />
+              <line x1="18" y1="11" x2="18" y2="20" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="18" cy="25" r="1.5" fill="#b84a4a" />
+            </svg>
+            <h2 className={s.abandonedTitle}>El Dungeon Master ha cerrado la sala</h2>
+            <p className={s.abandonedSub}>La sesión fue cancelada. Vuelve al salón para unirte a otra aventura.</p>
+            <button
+              className={s.btnStart}
+              onClick={() => { loader.start(); router.push("/dashboard"); }}
+            >
+              Volver al Salón
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Expelled overlay */}
+      {expelled && (
+        <div className={s.expelledOverlay}>
+          <div className={s.expelledCard}>
+            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="17" fill="none" stroke="#b84a4a" strokeWidth="1.5" />
+              <path
+                d="M20 10 L22 18 L30 20 L22 22 L20 30 L18 22 L10 20 L18 18 Z"
+                fill="none" stroke="#b84a4a" strokeWidth="1.4" strokeLinejoin="round"
+              />
+              <line x1="13" y1="13" x2="27" y2="27" stroke="#b84a4a" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <h2 className={s.expelledTitle}>Has sido expulsado del grupo</h2>
+            <p className={s.expelledSub}>
+              El Dungeon Master te ha retirado de esta campaña.<br />
+              Vuelve al salón para explorar otras aventuras.
+            </p>
+            <button
+              className={s.btnStart}
+              onClick={() => { loader.start(); router.push("/dashboard"); }}
+              type="button"
+            >
+              Volver al Salón
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Campaign deleted overlay */}
+      {campaignDeleted && (
+        <div className={s.expelledOverlay}>
+          <div className={s.expelledCard}>
+            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="17" fill="none" stroke="#b84a4a" strokeWidth="1.5" />
+              <line x1="12" y1="12" x2="28" y2="28" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
+              <line x1="28" y1="12" x2="12" y2="28" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <h2 className={s.expelledTitle}>La campaña ha sido eliminada</h2>
+            <p className={s.expelledSub}>
+              El Dungeon Master ha disuelto esta campaña.<br />
+              Vuelve al salón para explorar otras aventuras.
+            </p>
+            <button
+              className={s.btnStart}
+              onClick={() => { loader.start(); router.push("/dashboard"); }}
+              type="button"
+            >
+              Volver al Salón
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className={s.header}>
@@ -310,9 +482,7 @@ export default function Lobby() {
           {/* DM controls */}
           {isDM && (
             <div className={s.dmActions}>
-              {startError && (
-                <p className={s.startError}>{startError}</p>
-              )}
+              {startError && <p className={s.startError}>{startError}</p>}
               <button
                 className={s.btnStart}
                 onClick={handleStart}

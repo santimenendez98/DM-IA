@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
 import type { Character, CharacterStats } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
@@ -38,6 +39,8 @@ const STAT_DIE: Record<keyof CharacterStats, DieType> = {
 };
 
 const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880"] as const;
+
+const VOTE_DURATION = 30; // seconds
 
 const SETTING_LABELS: Record<string, string> = {
   fantasy: "Fantasía",
@@ -201,6 +204,154 @@ function DmThinking() {
         <span /><span /><span />
       </div>
       <span className={s.dmThinkingText}>El Dungeon Master está narrando...</span>
+    </div>
+  );
+}
+
+// ── Player typing indicator ────────────────────────────────────
+
+function TypingIndicator({ name, color }: { name: string; color: string }) {
+  return (
+    <div className={s.typingIndicator}>
+      <div className={s.typingAvatar} style={{ background: color }}>
+        {name[0].toUpperCase()}
+      </div>
+      <div className={s.typingBubble}>
+        <span className={s.typingName} style={{ color }}>{name}</span>
+        <span className={s.typingLabel}>está escribiendo</span>
+        <div className={s.typingDots}>
+          <span /><span /><span />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Vote modal ─────────────────────────────────────────────────
+
+function VoteModal({
+  activeVote,
+  voteCountdown,
+  userId,
+  campaign,
+  charColorMap,
+  onCastVote,
+  onCancel,
+}: {
+  activeVote: ActiveVote;
+  voteCountdown: number;
+  userId: string;
+  campaign: CampaignDetail;
+  charColorMap: Record<string, string>;
+  onCastVote: (vote: boolean) => void;
+  onCancel: () => void;
+}) {
+  const yesCount   = Object.values(activeVote.votes).filter(Boolean).length;
+  const noCount    = Object.values(activeVote.votes).filter((v) => v === false).length;
+  const pending    = activeVote.voter_ids.length - Object.keys(activeVote.votes).length;
+  const myVote     = activeVote.votes[userId];
+  const isProposer = userId === activeVote.proposer_id;
+
+  return (
+    <div className={s.voteOverlay}>
+      <div className={s.voteCard}>
+
+        <div className={s.voteHeader}>
+          <div className={s.voteHeaderLeft}>
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+              <polygon
+                points="8,1.5 9.8,6.2 15,6.2 10.7,9.3 12.4,14 8,11 3.6,14 5.3,9.3 1,6.2 6.2,6.2"
+                fill="none" stroke="#b8860b" strokeWidth="1.2" strokeLinejoin="round"
+              />
+            </svg>
+            <span>Votación: ¿Actuar ahora?</span>
+          </div>
+          <div className={cx(s.voteTimer, voteCountdown <= 10 && s.voteTimerUrgent)}>
+            {voteCountdown}s
+          </div>
+        </div>
+
+        <div className={s.voteAction}>
+          <span className={s.voteActionChar}>{activeVote.character_name}</span>
+          <span className={s.voteActionText}>
+            {activeVote.content.length > 130
+              ? `${activeVote.content.slice(0, 130)}…`
+              : activeVote.content}
+          </span>
+        </div>
+
+        <div className={s.voteTally}>
+          <span className={s.voteTallyYes}>{yesCount} Sí</span>
+          <span className={s.voteTallyDivider}>·</span>
+          <span className={s.voteTallyNo}>{noCount} No</span>
+          <span className={s.voteTallyDivider}>·</span>
+          <span className={s.voteTallyPending}>{pending} pendiente{pending !== 1 && "s"}</span>
+        </div>
+
+        <div className={s.voterList}>
+          {activeVote.voter_ids.map((uid) => {
+            const vote      = activeVote.votes[uid];
+            const chars     = campaign.characters.filter((c) => c.user_id === uid);
+            const firstChar = chars[0];
+            const color     = firstChar
+              ? charColorMap[firstChar.id] ?? AVATAR_COLORS[0]
+              : "#6a5030";
+            const name = chars.length > 0
+              ? chars.map((c) => c.name).join(" & ")
+              : uid === campaign.user_id ? "Dungeon Master" : "Aventurero";
+            return (
+              <div key={uid} className={s.voterRow}>
+                <div className={s.voterAvatar} style={{ background: color }}>
+                  {name[0].toUpperCase()}
+                </div>
+                <span className={s.voterName}>{name}</span>
+                {uid === activeVote.proposer_id && (
+                  <span className={s.voterProposer}>propone</span>
+                )}
+                <span className={cx(
+                  s.voterVote,
+                  vote === true  && s.voterVoteYes,
+                  vote === false && s.voterVoteNo,
+                )}>
+                  {vote === true ? "Sí" : vote === false ? "No" : "···"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className={s.voteFooter}>
+          {isProposer ? (
+            <>
+              <span className={s.voteWaiting}>Esperando votos...</span>
+              <button className={s.voteCancelBtn} onClick={onCancel} type="button">
+                Cancelar
+              </button>
+            </>
+          ) : myVote !== undefined ? (
+            <span className={s.voteWaiting}>
+              Tu voto: <strong>{myVote ? "Sí" : "No"}</strong>
+            </span>
+          ) : (
+            <>
+              <button className={s.voteNoBtn} onClick={() => onCastVote(false)} type="button">
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                  <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                No
+              </button>
+              <button className={s.voteYesBtn} onClick={() => onCastVote(true)} type="button">
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                  <polyline points="2,6 5,9 10,3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Sí
+              </button>
+            </>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -438,6 +589,17 @@ const DicePanel = React.forwardRef<
   );
 });
 
+// ── Vote types ─────────────────────────────────────────────────
+
+interface ActiveVote {
+  proposer_id: string;
+  character_id: string;
+  character_name: string;
+  content: string;
+  votes: Record<string, boolean>; // userId → yes/no
+  voter_ids: string[];            // unique user IDs in the session
+}
+
 // ── Main component ─────────────────────────────────────────────
 
 export default function Play() {
@@ -448,6 +610,7 @@ export default function Play() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [userId, setUserId] = useState<string>("");
   const [activeCharId, setActiveCharId] = useState<string>("");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -456,18 +619,43 @@ export default function Play() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [diceOpen, setDiceOpen] = useState(false);
   const [diceStatTrigger, setDiceStatTrigger] = useState<TriggerRoll | null>(null);
+  const [kicked, setKicked] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Map<string, { name: string; color: string }>>(new Map());
+  const [activeVote, setActiveVote] = useState<ActiveVote | null>(null);
+  const [voteCountdown, setVoteCountdown] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isFirstScroll = useRef(true);
   const diceBtnRef = useRef<HTMLButtonElement>(null);
   const dicePanelRef = useRef<HTMLDivElement>(null);
+  // Refs so Realtime callbacks always access the latest campaign/userId
+  const campaignRef = useRef<CampaignDetail | null>(null);
+  const userIdRef   = useRef<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef        = useRef<any>(null);
+  const isTypingRef       = useRef(false);
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const voteTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voteIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeVoteRef   = useRef<ActiveVote | null>(null);
+  useEffect(() => { campaignRef.current = campaign; }, [campaign]);
+  useEffect(() => { userIdRef.current   = userId;   }, [userId]);
+  useEffect(() => { activeVoteRef.current = activeVote; }, [activeVote]);
 
   // ── Load data ──────────────────────────────────────────────
 
   useEffect(() => {
+    // Must arrive from the lobby — direct URL access is not allowed.
+    if (!sessionStorage.getItem(`play_auth_${id}`)) {
+      router.replace(`/campaigns/${id}/lobby`);
+      return;
+    }
+
     getCurrUser().then(async (u) => {
       if (!u) { router.replace("/auth/login"); return; }
+      setUserId(u.id);
 
       const [campRes, msgsRes] = await Promise.all([
         fetch(`/api/campaigns/${id}`),
@@ -496,8 +684,9 @@ export default function Play() {
       loader.stop();
       setLoading(false);
 
-      // First visit: let the DM open the scene.
-      if (msgs.length === 0) {
+      // Only the campaign owner (DM) triggers the opening narration.
+      // Players receive it via polling once it's saved to the database.
+      if (msgs.length === 0 && camp.user_id === u.id) {
         setDmThinking(true);
         try {
           const introRes = await fetch(`/api/campaigns/${camp.id}/messages`, {
@@ -507,14 +696,19 @@ export default function Play() {
           });
           if (introRes.ok) {
             const data = await introRes.json() as { dm_response?: Message };
-            if (data.dm_response) setMessages([data.dm_response]);
+            if (data.dm_response) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === data.dm_response!.id)) return prev;
+                return [...prev, data.dm_response!];
+              });
+            }
           } else if (introRes.status === 409) {
-            // Race: another tab already triggered it — fetch what was saved.
-            const msgsRes = await fetch(`/api/campaigns/${camp.id}/messages`);
-            if (msgsRes.ok) setMessages(await msgsRes.json() as Message[]);
+            // Another tab already triggered it — fetch the saved message.
+            const savedRes = await fetch(`/api/campaigns/${camp.id}/messages`);
+            if (savedRes.ok) setMessages(await savedRes.json() as Message[]);
           }
         } catch {
-          // Non-fatal: the DM will respond on the first player action.
+          // Non-fatal.
         } finally {
           setDmThinking(false);
         }
@@ -531,6 +725,173 @@ export default function Play() {
     });
     isFirstScroll.current = false;
   }, [messages, dmThinking, loading]);
+
+  // ── Realtime channel ──────────────────────────────────────────
+  // • Postgres Changes on campaign_messages → live messages for all clients
+  // • Presence → detect when DM leaves the session
+
+  useEffect(() => {
+    if (!campaign || !userId) return;
+
+    const supabase = createClient();
+    const channel  = supabase.channel(`play:${campaign.id}`, {
+      config: { presence: { key: userId } },
+    });
+    channelRef.current = channel;
+
+    channel
+      // ── Broadcast: DM ended the session ──────────────────────
+      .on("broadcast", { event: "dm_left" }, () => {
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+        setKicked(true);
+      })
+      // ── Broadcast: instant delivery without DB polling ────────
+      .on("broadcast", { event: "new_message" }, ({ payload }) => {
+        const msg = payload as Message;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      })
+      .on("broadcast", { event: "dm_thinking" }, () => {
+        setDmThinking(true);
+      })
+      .on("broadcast", { event: "dm_response" }, ({ payload }) => {
+        const msg = payload as Message;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setDmThinking(false);
+      })
+      // ── Broadcast: player typing indicators ──────────────────
+      .on("broadcast", { event: "typing_start" }, ({ payload }) => {
+        const { character_id, character_name } = payload as { character_id: string; character_name: string };
+        // Skip own characters
+        const mine = (campaignRef.current?.characters ?? [])
+          .filter((c) => c.user_id === userIdRef.current)
+          .map((c) => c.id);
+        if (mine.includes(character_id)) return;
+
+        const chars = campaignRef.current?.characters ?? [];
+        const idx   = chars.findIndex((c) => c.id === character_id);
+        const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+
+        // Refresh the auto-clear timer
+        const existing = typingTimeoutsRef.current.get(character_id);
+        if (existing) clearTimeout(existing);
+        const timer = setTimeout(() => {
+          setTypingUsers((prev) => { const m = new Map(prev); m.delete(character_id); return m; });
+          typingTimeoutsRef.current.delete(character_id);
+        }, 5000);
+        typingTimeoutsRef.current.set(character_id, timer);
+
+        setTypingUsers((prev) => new Map(prev).set(character_id, { name: character_name, color }));
+      })
+      .on("broadcast", { event: "typing_stop" }, ({ payload }) => {
+        const { character_id } = payload as { character_id: string };
+        const timer = typingTimeoutsRef.current.get(character_id);
+        if (timer) { clearTimeout(timer); typingTimeoutsRef.current.delete(character_id); }
+        setTypingUsers((prev) => { const m = new Map(prev); m.delete(character_id); return m; });
+      })
+      // ── Broadcast: democratic vote ────────────────────────────
+      .on("broadcast", { event: "vote_start" }, ({ payload }) => {
+        const { proposer_id, character_id, character_name, content, voter_ids } = payload as {
+          proposer_id: string; character_id: string; character_name: string;
+          content: string; voter_ids: string[];
+        };
+        if (proposer_id === userIdRef.current) return; // proposer handles locally
+        setActiveVote({ proposer_id, character_id, character_name, content,
+          votes: { [proposer_id]: true }, voter_ids });
+        setVoteCountdown(VOTE_DURATION);
+        if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+        voteIntervalRef.current = setInterval(() => {
+          setVoteCountdown((c) => Math.max(0, c - 1));
+        }, 1000);
+        voteTimeoutRef.current = setTimeout(() => {
+          if (!activeVoteRef.current) return;
+          setActiveVote(null);
+          setVoteCountdown(0);
+          if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        }, VOTE_DURATION * 1000);
+      })
+      .on("broadcast", { event: "vote_cast" }, ({ payload }) => {
+        const { voter_id, vote } = payload as { voter_id: string; vote: boolean };
+        setActiveVote((prev) =>
+          prev ? { ...prev, votes: { ...prev.votes, [voter_id]: vote } } : prev,
+        );
+      })
+      .on("broadcast", { event: "vote_cancel" }, () => {
+        if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+        if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        setActiveVote(null);
+        setVoteCountdown(0);
+      })
+      // ── Postgres Changes: fallback if migration is applied ────
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "campaign_messages",
+          filter: `campaign_id=eq.${campaign.id}` },
+        (payload) => {
+          const raw = payload.new as Message;
+          const chars = campaignRef.current?.characters ?? [];
+          const char  = chars.find((c) => c.id === raw.character_id);
+          const msg: Message = { ...raw, character_name: char?.name ?? null };
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
+          if (msg.role === "dm") setDmThinking(false);
+        },
+      )
+      // DM presence left → redirect players to dashboard (fallback for unexpected disconnects)
+      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+        const dmLeft = leftPresences.some(
+          (p) => (p as { role?: string }).role === "dm",
+        );
+        if (dmLeft) setKicked(true);
+      })
+      .subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") return;
+        const isDM = campaignRef.current?.user_id === userIdRef.current;
+        await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
+      });
+
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      typingTimeoutsRef.current.forEach(clearTimeout);
+      typingTimeoutsRef.current.clear();
+      if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+      if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    };
+  }, [campaign?.id, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Player intro fallback poll ─────────────────────────────
+  // If Realtime isn't configured yet (tables not in publication),
+  // players poll every 6 s until the DM's opening narration arrives.
+
+  useEffect(() => {
+    if (loading || !campaign || !userId) return;
+    const isDM = campaign.user_id === userId;
+    if (isDM || messages.length > 0) return;
+
+    const timer = setInterval(async () => {
+      const res = await fetch(`/api/campaigns/${campaign.id}/messages`);
+      if (!res.ok) return;
+      const fetched = await res.json() as Message[];
+      if (fetched.length > 0) setMessages(fetched);
+    }, 6000);
+
+    return () => clearInterval(timer);
+  }, [loading, campaign, userId, messages.length]);
 
   // ── Auto-resize textarea ───────────────────────────────────
 
@@ -558,12 +919,96 @@ export default function Play() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [diceOpen]);
 
+  // ── Leave session ─────────────────────────────────────
+  // DM leaving resets started_at (so lobby shows waiting state) and broadcasts
+  // dm_left so all connected players are immediately redirected to dashboard.
+
+  const handleLeave = useCallback(async () => {
+    if (campaign?.user_id === userId) {
+      fetch(`/api/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ started_at: null }),
+      }).catch(() => {});
+      if (channelRef.current) {
+        try {
+          await channelRef.current.send({
+            type: "broadcast",
+            event: "dm_left",
+            payload: {},
+          });
+        } catch { /* non-fatal */ }
+      }
+    }
+    loader.start();
+    router.push("/dashboard");
+  }, [campaign, userId, router]);
+
+  // ── Typing broadcast ──────────────────────────────────────
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInput(value);
+
+    const activeChar = campaign?.characters.find(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!activeChar || !channelRef.current) return;
+
+    if (value.trim()) {
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        channelRef.current.send({
+          type: "broadcast",
+          event: "typing_start",
+          payload: { character_id: activeCharId, character_name: activeChar.name },
+        });
+      }
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      typingDebounceRef.current = setTimeout(() => {
+        if (isTypingRef.current) {
+          isTypingRef.current = false;
+          channelRef.current?.send({
+            type: "broadcast",
+            event: "typing_stop",
+            payload: { character_id: activeCharId },
+          });
+        }
+      }, 3000);
+    } else if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      channelRef.current.send({
+        type: "broadcast",
+        event: "typing_stop",
+        payload: { character_id: activeCharId },
+      });
+    }
+  }, [campaign, activeCharId, userId]);
+
   // ── Send message ───────────────────────────────────────────
 
-  const handleSend = useCallback(async (withDm: boolean) => {
-    if (!input.trim() || sending || dmThinking || !campaign || !activeCharId) return;
+  const handleSend = useCallback(async (withDm: boolean, overrideContent?: string) => {
+    const content = overrideContent ?? input.trim();
+    if (!content || sending || dmThinking || !campaign || !activeCharId) return;
 
-    const content = input.trim();
+    // Ensure the active character belongs to the current user
+    const charIsOwned = campaign.characters.some(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!charIsOwned) return;
+
+    // Clear typing indicator before sending
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "typing_stop",
+        payload: { character_id: activeCharId },
+      });
+    }
+
     setInput("");
     setSendError(null);
     setSending(true);
@@ -589,8 +1034,10 @@ export default function Play() {
       };
 
       setMessages((prev) => {
-        const next = [...prev, data.message];
-        if (data.dm_response) next.push(data.dm_response);
+        const ids = new Set(prev.map((m) => m.id));
+        const next = [...prev];
+        if (!ids.has(data.message.id)) next.push(data.message);
+        if (data.dm_response && !ids.has(data.dm_response.id)) next.push(data.dm_response);
         return next;
       });
 
@@ -601,16 +1048,122 @@ export default function Play() {
       setSending(false);
       setDmThinking(false);
     }
-  }, [input, sending, dmThinking, campaign, activeCharId]);
+  }, [input, sending, dmThinking, campaign, activeCharId, userId]);
+
+  // ── Act request ────────────────────────────────────────────
+  // Single-player (all characters owned by current user) → act immediately.
+  // Multi-player (at least one character owned by someone else) → confirm first.
+
+  const handleActRequest = useCallback(() => {
+    if (!input.trim() || sending || dmThinking || !campaign || !activeCharId) return;
+    const charIsOwned = campaign.characters.some(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!charIsOwned) return;
+    const isMultiplayer = campaign.characters.some((c) => c.user_id !== userId);
+    if (!isMultiplayer) {
+      handleSend(true);
+      return;
+    }
+
+    // Multiplayer: start a democratic vote
+    const presenceState = channelRef.current?.presenceState() ?? {};
+    const presenceIds = Object.keys(presenceState);
+    const voter_ids = presenceIds.length > 0 ? presenceIds : [userId];
+
+    if (voter_ids.length <= 1) {
+      handleSend(true);
+      return;
+    }
+
+    const content = input.trim();
+    setInput("");
+
+    const proposerChar = campaign.characters.find((c) => c.id === activeCharId);
+    const character_name = proposerChar?.name ?? "Aventurero";
+
+    const voteData: ActiveVote = {
+      proposer_id: userId,
+      character_id: activeCharId,
+      character_name,
+      content,
+      votes: { [userId]: true },
+      voter_ids,
+    };
+    setActiveVote(voteData);
+    setVoteCountdown(VOTE_DURATION);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    voteIntervalRef.current = setInterval(() => {
+      setVoteCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+    voteTimeoutRef.current = setTimeout(() => {
+      if (!activeVoteRef.current) return;
+      channelRef.current?.send({ type: "broadcast", event: "vote_cancel", payload: {} });
+      setActiveVote(null);
+      setVoteCountdown(0);
+      if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    }, VOTE_DURATION * 1000);
+
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "vote_start",
+      payload: { proposer_id: userId, character_id: activeCharId, character_name, content, voter_ids },
+    });
+  }, [input, sending, dmThinking, campaign, activeCharId, userId, handleSend]);
+
+  const castVote = useCallback((vote: boolean) => {
+    const uid = userIdRef.current;
+    if (!activeVoteRef.current || !uid) return;
+    if (activeVoteRef.current.votes[uid] !== undefined) return;
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "vote_cast",
+      payload: { voter_id: uid, vote },
+    });
+    setActiveVote((prev) => {
+      if (!prev) return prev;
+      return { ...prev, votes: { ...prev.votes, [uid]: vote } };
+    });
+  }, []);
+
+  const cancelVote = useCallback(() => {
+    if (!activeVoteRef.current) return;
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    channelRef.current?.send({ type: "broadcast", event: "vote_cancel", payload: {} });
+    setActiveVote(null);
+    setVoteCountdown(0);
+  }, []);
+
+  // ── Vote resolution ────────────────────────────────────────
+  // Runs whenever votes update; resolves when every voter has cast a vote.
+  useEffect(() => {
+    if (!activeVote) return;
+    const { voter_ids, votes, proposer_id, content } = activeVote;
+    if (Object.keys(votes).length < voter_ids.length) return;
+
+    const yesCount = Object.values(votes).filter(Boolean).length;
+    const approved = yesCount * 2 > voter_ids.length;
+
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    setActiveVote(null);
+    setVoteCountdown(0);
+
+    if (approved && userIdRef.current === proposer_id) {
+      handleSend(true, content);
+    }
+  }, [activeVote, handleSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        handleSend(true);
+        handleActRequest();
       }
     },
-    [handleSend],
+    [handleActRequest],
   );
 
   const handleDiceInsert = useCallback((text: string) => {
@@ -663,6 +1216,8 @@ export default function Play() {
 
   // ── Derived ────────────────────────────────────────────────
 
+  // Characters the current user can speak as (owned by them)
+  const myChars = campaign.characters.filter((c) => c.user_id === userId);
   const activeChar = campaign.characters.find((c) => c.id === activeCharId);
   const charColorMap = Object.fromEntries(
     campaign.characters.map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
@@ -674,18 +1229,54 @@ export default function Play() {
     <div className={s.page}>
       <div className={s.stars} aria-hidden />
 
+      {/* ── Vote modal ──────────────────────────────────────── */}
+      {activeVote && (
+        <VoteModal
+          activeVote={activeVote}
+          voteCountdown={voteCountdown}
+          userId={userId}
+          campaign={campaign}
+          charColorMap={charColorMap}
+          onCastVote={castVote}
+          onCancel={cancelVote}
+        />
+      )}
+
+      {/* ── DM left overlay ─────────────────────────────────── */}
+      {kicked && (
+        <div className={s.kickOverlay}>
+          <div className={s.kickCard}>
+            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="17" fill="none" stroke="#b84a4a" strokeWidth="1.5" />
+              <line x1="20" y1="11" x2="20" y2="23" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="20" cy="29" r="2" fill="#b84a4a" />
+            </svg>
+            <h2 className={s.kickTitle}>La sesión ha terminado</h2>
+            <p className={s.kickSub}>
+              El Dungeon Master ha abandonado la partida. Pulsa el botón para volver al Salón.
+            </p>
+            <button
+              className={s.kickBtn}
+              onClick={() => { loader.start(); router.replace("/dashboard"); }}
+            >
+              Volver al Salón ahora
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ──────────────────────────────────────────── */}
       <header className={s.header}>
         <button
           className={s.backBtn}
-          onClick={() => { loader.start(); router.push(`/campaigns/${campaign.id}`); }}
+          onClick={handleLeave}
           type="button"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
             <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Campaña
+          Salón
         </button>
 
         <div className={s.headerDivider} aria-hidden />
@@ -773,10 +1364,11 @@ export default function Play() {
                   color={AVATAR_COLORS[i % AVATAR_COLORS.length]}
                   active={char.id === activeCharId}
                   onClick={() => {
-                    setActiveCharId(char.id);
+                    // Only allow switching to characters owned by the current user
+                    if (char.user_id === userId) setActiveCharId(char.id);
                     setSidebarOpen(false);
                   }}
-                  onStatRoll={handleStatRoll}
+                  onStatRoll={char.user_id === userId ? handleStatRoll : undefined}
                 />
               ))
             )}
@@ -821,6 +1413,9 @@ export default function Play() {
               )
             )}
 
+            {[...typingUsers.entries()].map(([charId, { name, color }]) => (
+              <TypingIndicator key={charId} name={name} color={color} />
+            ))}
             {dmThinking && <DmThinking />}
             <div ref={messagesEndRef} />
           </div>
@@ -841,11 +1436,11 @@ export default function Play() {
           {/* Input area */}
           <div className={s.inputArea}>
 
-            {/* Character tabs — only shown when party > 1 */}
-            {campaign.characters.length > 1 && (
+            {/* Character tabs — only own characters, only shown when user has more than one */}
+            {myChars.length > 1 && (
               <div className={s.charTabs}>
-                {campaign.characters.map((c, i) => {
-                  const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                {myChars.map((c) => {
+                  const color = charColorMap[c.id] ?? AVATAR_COLORS[0];
                   const isActive = c.id === activeCharId;
                   return (
                     <button
@@ -868,7 +1463,7 @@ export default function Play() {
                 ref={textareaRef}
                 className={s.textarea}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   activeChar
@@ -894,7 +1489,7 @@ export default function Play() {
                 </button>
                 <button
                   className={s.btnAct}
-                  onClick={() => handleSend(true)}
+                  onClick={handleActRequest}
                   disabled={!input.trim() || sending || dmThinking}
                   type="button"
                   title="Actuar e invocar al DM (Ctrl+Enter)"
