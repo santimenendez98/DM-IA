@@ -14,6 +14,8 @@ export interface Campaign {
   setting: Setting;
   tone: Tone;
   system_prompt: string | null;
+  is_public: boolean;
+  invite_code: string | null;
   started_at: string | null;
   character_ids: string[];  // populated from campaign_characters join
   created_at: string;
@@ -25,6 +27,7 @@ export type CreateCampaignInput = {
   setting: Setting;
   tone: Tone;
   system_prompt?: string;
+  is_public?: boolean;
 };
 
 export type UpdateCampaignInput = Partial<CreateCampaignInput> & {

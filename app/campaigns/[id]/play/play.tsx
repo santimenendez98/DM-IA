@@ -488,7 +488,11 @@ export default function Play() {
 
       setCampaign(camp);
       setMessages(msgs);
-      if (camp.characters.length > 0) setActiveCharId(camp.characters[0].id);
+      if (camp.characters.length > 0) {
+        // Prefer the user's own character; fall back to the first in the party.
+        const myChar = camp.characters.find((c) => c.user_id === u.id);
+        setActiveCharId((myChar ?? camp.characters[0]).id);
+      }
       loader.stop();
       setLoading(false);
 

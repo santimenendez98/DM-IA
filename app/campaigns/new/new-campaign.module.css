@@ -314,6 +314,68 @@
   box-shadow: 0 0 0 2px rgba(184,134,11,0.15);
 }
 
+/* ── Visibility toggle ───────────────────────────────────────── */
+
+.visibilityRow {
+  display: flex;
+  gap: 10px;
+}
+
+.visibilityBtn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px 14px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  color: #4a3510;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  outline: none;
+}
+
+.visibilityBtn:hover {
+  border-color: #7a5c1e;
+  color: #9a7840;
+  background: rgba(184,134,11,0.04);
+}
+
+.visibilityBtn:focus-visible {
+  outline: 2px solid #b8860b;
+  outline-offset: 2px;
+}
+
+.visibilityBtnSelected {
+  border-color: #b8860b !important;
+  color: #e8c040 !important;
+  background: rgba(184,134,11,0.1) !important;
+  box-shadow: 0 0 14px rgba(184,134,11,0.2), inset 0 0 0 1px rgba(232,192,64,0.08);
+}
+
+.visibilityLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+
+.visibilityDesc {
+  font-size: 11px;
+  font-style: italic;
+  color: #3a2808;
+  transition: color 0.2s;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.visibilityBtnSelected .visibilityDesc { color: #7a6040; }
+
 /* ── Errors ──────────────────────────────────────────────────── */
 
 .fieldError {

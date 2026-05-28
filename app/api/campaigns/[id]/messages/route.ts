@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { callGeminiDM } from "@/lib/gemini";
 import type { Character } from "@/types/character";
 
@@ -65,6 +66,51 @@ function flattenMessage(row: Record<string, unknown>) {
   };
 }
 
+// Returns the campaign row (with party) if the user is the owner OR a player.
+// Uses the admin client so RLS doesn't block cross-user reads.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getCampaignForUser(campaignId: string, userId: string, supabase: any) {
+  const admin = createAdminClient();
+
+  // Owner check (via RLS-honoring client)
+  const { data: ownerRow } = await supabase
+    .from("campaigns")
+    .select("*, campaign_characters(character_id, characters(*))")
+    .eq("id", campaignId)
+    .eq("user_id", userId)
+    .single();
+
+  if (ownerRow) return { campaign: ownerRow, isOwner: true };
+
+  // Player check: user has a character in the campaign
+  const { data: userChars } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("user_id", userId);
+
+  const charIds = (userChars ?? []).map((c: { id: string }) => c.id);
+  if (charIds.length === 0) return null;
+
+  const { data: membership } = await admin
+    .from("campaign_characters")
+    .select("campaign_id")
+    .eq("campaign_id", campaignId)
+    .in("character_id", charIds)
+    .limit(1)
+    .single();
+
+  if (!membership) return null;
+
+  const { data: campRow } = await admin
+    .from("campaigns")
+    .select("*, campaign_characters(character_id, characters(*))")
+    .eq("id", campaignId)
+    .single();
+
+  if (!campRow) return null;
+  return { campaign: campRow, isOwner: false };
+}
+
 // ── GET /api/campaigns/[id]/messages ──────────────────────────
 // Returns all messages for the campaign ordered by creation time.
 
@@ -84,21 +130,16 @@ export async function GET(
 
   const { id: campaignId } = await params;
 
-  const { data: campaign } = await supabase
-    .from("campaigns")
-    .select("id")
-    .eq("id", campaignId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!campaign) {
+  const access = await getCampaignForUser(campaignId, user.id, supabase);
+  if (!access) {
     return NextResponse.json(
       { error: "Campaña no encontrada o no tienes permiso." },
       { status: 404 },
     );
   }
 
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("campaign_messages")
     .select("*, characters(name)")
     .eq("campaign_id", campaignId)
@@ -137,20 +178,14 @@ export async function POST(
 
   const { id: campaignId } = await params;
 
-  // Fetch campaign with full party
-  const { data: campaign } = await supabase
-    .from("campaigns")
-    .select("*, campaign_characters(character_id, characters(*))")
-    .eq("id", campaignId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!campaign) {
+  const access = await getCampaignForUser(campaignId, user.id, supabase);
+  if (!access) {
     return NextResponse.json(
       { error: "Campaña no encontrada o no tienes permiso." },
       { status: 404 },
     );
   }
+  const campaign = access.campaign;
 
   let body: unknown;
   try {
@@ -166,10 +201,12 @@ export async function POST(
     dm_intro?: boolean;
   };
 
+  const admin = createAdminClient();
+
   // ── DM intro mode ────────────────────────────────────────────
   if (dm_intro) {
     // Idempotency: refuse if messages already exist.
-    const { count } = await supabase
+    const { count } = await admin
       .from("campaign_messages")
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", campaignId);
@@ -205,7 +242,7 @@ export async function POST(
       );
     }
 
-    const { data: dmMsg, error: dmErr } = await supabase
+    const { data: dmMsg, error: dmErr } = await admin
       .from("campaign_messages")
       .insert({
         campaign_id: campaignId,
@@ -254,8 +291,23 @@ export async function POST(
     );
   }
 
+  // Verify character belongs to the requesting user (prevents impersonation)
+  const { data: ownedChar } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("id", character_id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!ownedChar && !access.isOwner) {
+    return NextResponse.json(
+      { error: "No puedes actuar como ese personaje." },
+      { status: 403 },
+    );
+  }
+
   // Determine next turn_number
-  const { count: msgCount } = await supabase
+  const { count: msgCount } = await admin
     .from("campaign_messages")
     .select("*", { count: "exact", head: true })
     .eq("campaign_id", campaignId);
@@ -263,7 +315,7 @@ export async function POST(
   const turn_number = (msgCount ?? 0) + 1;
 
   // Insert the character message
-  const { data: charMsg, error: insertError } = await supabase
+  const { data: charMsg, error: insertError } = await admin
     .from("campaign_messages")
     .insert({
       campaign_id: campaignId,
@@ -291,7 +343,7 @@ export async function POST(
   const systemInstruction = buildSystemInstruction(campaign, characters);
 
   // Fetch up to 40 recent messages for context (includes the one just inserted)
-  const { data: historyRows } = await supabase
+  const { data: historyRows } = await admin
     .from("campaign_messages")
     .select("role, content, characters(name)")
     .eq("campaign_id", campaignId)
@@ -315,9 +367,17 @@ export async function POST(
       };
     });
 
+  // Gemini requires the conversation to start with a "user" turn.
+  // The DM intro is stored as the first message (role "dm"), so we prepend
+  // a synthetic user prompt to satisfy the API constraint.
+  const geminiHistory: typeof history =
+    history[0]?.role === "dm"
+      ? [{ role: "user", content: "Comienza la aventura." }, ...history]
+      : history;
+
   let dmContent: string;
   try {
-    dmContent = await callGeminiDM(systemInstruction, history);
+    dmContent = await callGeminiDM(systemInstruction, geminiHistory);
   } catch (e) {
     console.error("Gemini error:", e);
     return NextResponse.json(
@@ -330,7 +390,7 @@ export async function POST(
   }
 
   // Insert DM response
-  const { data: dmMsg, error: dmInsertError } = await supabase
+  const { data: dmMsg, error: dmInsertError } = await admin
     .from("campaign_messages")
     .insert({
       campaign_id: campaignId,

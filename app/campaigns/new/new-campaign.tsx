@@ -145,6 +145,7 @@ export default function NewCampaign() {
   const [setting, setSetting] = useState<Setting | "">("");
   const [tone, setTone] = useState<Tone | "">("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -182,6 +183,7 @@ export default function NewCampaign() {
           setting,
           tone,
           system_prompt: systemPrompt.trim() || undefined,
+          is_public: isPublic,
         }),
       });
       if (!res.ok) {
@@ -355,6 +357,38 @@ export default function NewCampaign() {
                   rows={4}
                   maxLength={1000}
                 />
+              </div>
+
+              {/* Visibility */}
+              <div className={s.section}>
+                <div className={s.label}>Visibilidad</div>
+                <div className={s.visibilityRow}>
+                  <button
+                    type="button"
+                    className={cx(s.visibilityBtn, !isPublic && s.visibilityBtnSelected)}
+                    onClick={() => setIsPublic(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+                      <rect x="3" y="7" width="10" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <circle cx="8" cy="11" r="1.2" fill="currentColor" />
+                    </svg>
+                    <span className={s.visibilityLabel}>Privada</span>
+                    <span className={s.visibilityDesc}>Solo visible para ti</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={cx(s.visibilityBtn, isPublic && s.visibilityBtnSelected)}
+                    onClick={() => setIsPublic(true)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M2 8h12M8 2c-2 2-3 4-3 6s1 4 3 6M8 2c2 2 3 4 3 6s-1 4-3 6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    <span className={s.visibilityLabel}>Pública</span>
+                    <span className={s.visibilityDesc}>Visible en el Gremio</span>
+                  </button>
+                </div>
               </div>
 
               <OrnamentDivider margin="0 0 28px" />

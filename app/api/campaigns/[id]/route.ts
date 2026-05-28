@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { SETTINGS, TONES } from "@/types/union_types";
 import type { UpdateCampaignInput } from "@/types/campaing";
+import { generateInviteCode } from "@/lib/invite-code";
 
 // ── GET /api/campaigns/[id] ────────────────────────────────────
 // Returns a single campaign with its full character objects.
@@ -26,22 +28,75 @@ export async function GET(
     .eq("user_id", user.id)
     .single();
 
-  if (error || !data) {
-    return NextResponse.json(
-      { error: "Campaña no encontrada o no tienes permiso para verla." },
-      { status: 404 },
-    );
+  // ── Owner path ─────────────────────────────────────────────────
+  if (!error && data) {
+    // Auto-generate invite code on first load if missing.
+    let inviteCode = (data as Record<string, unknown>).invite_code as string | null | undefined;
+    if (!inviteCode) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const candidate = generateInviteCode();
+        const { error: codeErr } = await supabase
+          .from("campaigns")
+          .update({ invite_code: candidate })
+          .eq("id", id)
+          .eq("user_id", user.id);
+        if (!codeErr) { inviteCode = candidate; break; }
+        if (codeErr.code !== "23505") break;
+      }
+    }
+
+    const rows = (data.campaign_characters as Array<{ character_id: string; characters: unknown }>) ?? [];
+    return NextResponse.json({
+      ...data,
+      invite_code: inviteCode ?? null,
+      character_ids: rows.map((r) => r.character_id),
+      characters: rows.map((r) => r.characters).filter(Boolean),
+      campaign_characters: undefined,
+    });
   }
 
-  const rows = (data.campaign_characters as Array<{ character_id: string; characters: unknown }>) ?? [];
-  const campaign = {
-    ...data,
-    character_ids: rows.map((r) => r.character_id),
-    characters: rows.map((r) => r.characters).filter(Boolean),
-    campaign_characters: undefined,
-  };
+  // ── Player path ────────────────────────────────────────────────
+  // Not the owner — check if the user participates via campaign_characters.
+  const { data: userChars } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("user_id", user.id);
 
-  return NextResponse.json(campaign);
+  const charIds = (userChars ?? []).map((c) => c.id as string);
+  if (charIds.length > 0) {
+    const admin = createAdminClient();
+    const { data: membership } = await admin
+      .from("campaign_characters")
+      .select("campaign_id")
+      .eq("campaign_id", id)
+      .in("character_id", charIds)
+      .limit(1)
+      .single();
+
+    if (membership) {
+      const { data: campData, error: campErr } = await admin
+        .from("campaigns")
+        .select("*, campaign_characters(character_id, characters(*))")
+        .eq("id", id)
+        .single();
+
+      if (!campErr && campData) {
+        const rows = (campData.campaign_characters as Array<{ character_id: string; characters: unknown }>) ?? [];
+        return NextResponse.json({
+          ...campData,
+          invite_code: null,
+          character_ids: rows.map((r) => r.character_id),
+          characters: rows.map((r) => r.characters).filter(Boolean),
+          campaign_characters: undefined,
+        });
+      }
+    }
+  }
+
+  return NextResponse.json(
+    { error: "Campaña no encontrada o no tienes permiso para verla." },
+    { status: 404 },
+  );
 }
 
 // ── PATCH /api/campaigns/[id] ──────────────────────────────────
