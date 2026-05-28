@@ -5,6 +5,7 @@ import { SETTINGS, TONES } from "@/types/union_types";
 import type { UpdateCampaignInput } from "@/types/campaing";
 import { generateInviteCode } from "@/lib/invite-code";
 import { broadcastToChannel } from "@/lib/supabase/broadcast";
+import { createNotification } from "@/lib/notifications";
 
 // ── GET /api/campaigns/[id] ────────────────────────────────────
 // Returns a single campaign with its full character objects.
@@ -238,7 +239,7 @@ export async function DELETE(
   // Verify the campaign exists and belongs to this user before deleting.
   const { data: existing, error: fetchError } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, name")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -249,6 +250,17 @@ export async function DELETE(
       { status: 404 },
     );
   }
+
+  // Fetch members before CASCADE delete removes campaign_characters rows.
+  const admin = createAdminClient();
+  const { data: members } = await admin
+    .from("campaign_characters")
+    .select("characters(user_id)")
+    .eq("campaign_id", id);
+
+  const memberUserIds = (members ?? [])
+    .map((m) => ((m.characters as unknown) as { user_id?: string } | null)?.user_id ?? null)
+    .filter((uid): uid is string => uid !== null);
 
   const { error } = await supabase
     .from("campaigns")
@@ -262,6 +274,17 @@ export async function DELETE(
 
   broadcastToChannel(`lobby:${id}`,    "campaign_deleted", { campaign_id: id });
   broadcastToChannel(`campaign:${id}`, "campaign_deleted", { campaign_id: id });
+
+  const campaignName = existing.name as string;
+  for (const uid of memberUserIds) {
+    createNotification({
+      userId: uid,
+      type: "campaign_deleted",
+      title: "Campaña eliminada",
+      body: `"${campaignName}" fue eliminada por el Dungeon Master.`,
+      data: { campaign_name: campaignName },
+    });
+  }
 
   return new NextResponse(null, { status: 204 });
 }

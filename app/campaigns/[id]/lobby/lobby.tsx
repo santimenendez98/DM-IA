@@ -196,6 +196,9 @@ export default function Lobby() {
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
+        if (!isDM) {
+          fetch(`/api/campaigns/${campaign.id}/lobby/entered`, { method: "POST" }).catch(() => {});
+        }
       });
 
     return () => { channelRef.current = null; supabase.removeChannel(channel); };

@@ -1,0 +1,404 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* ── Page shell ───────────────────────────────────────────────── */
+
+.page {
+  height: 100vh;
+  background: #07040a;
+  background-image:
+    radial-gradient(ellipse 70% 50% at 10% 0%,  rgba(30,10,50,0.8) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(10,20,50,0.7) 0%, transparent 60%);
+  color: #e0cc90;
+  font-family: 'Crimson Text', Georgia, serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.8) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,0.5) 1px,   transparent 1px),
+    radial-gradient(circle, rgba(255,255,220,0.3) 1.5px, transparent 1.5px);
+  background-size: 200px 200px, 140px 140px, 280px 280px;
+  background-position: 0 0, 70px 100px, 150px 50px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* ── Two-column layout ────────────────────────────────────────── */
+
+.layout {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────── */
+
+.sidebar {
+  width: 272px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(184,134,11,0.18);
+  background: rgba(7,4,10,0.5);
+  overflow: hidden;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px 14px;
+  border-bottom: 1px solid #1e1608;
+  flex-shrink: 0;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.backBtn:hover { color: #c9a030; border-color: #7a5c1e; }
+
+.sidebarTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.campaignList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.campaignList::-webkit-scrollbar        { width: 3px; }
+.campaignList::-webkit-scrollbar-track  { background: transparent; }
+.campaignList::-webkit-scrollbar-thumb  { background: #2a1e0e; border-radius: 2px; }
+
+.campaignItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 11px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(26,18,8,0.6);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  border-left: 2px solid transparent;
+}
+.campaignItem:hover { background: rgba(184,134,11,0.05); }
+
+.campaignItemActive {
+  background: rgba(184,134,11,0.09) !important;
+  border-left-color: #b8860b;
+}
+
+.campaignItemName {
+  font-family: 'Cinzel', serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #c0aa70;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+.campaignItemActive .campaignItemName { color: #e0cc90; }
+
+.campaignItemSub {
+  font-size: 11px;
+  color: #4a3510;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.previewUser {
+  font-style: normal;
+  color: #6a5028;
+}
+
+.emptySidebar {
+  padding: 28px 16px;
+  font-size: 12px;
+  color: #3a2808;
+  font-style: italic;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── Chat panel ───────────────────────────────────────────────── */
+
+.chatPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chatHeader {
+  padding: 14px 20px;
+  border-bottom: 1px solid #1e1608;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.2);
+}
+
+.chatHeaderInner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chatTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e0cc90;
+  letter-spacing: 0.06em;
+}
+
+/* ── Message list ─────────────────────────────────────────────── */
+
+.messageList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px 8px;
+  display: flex;
+  flex-direction: column;
+}
+.messageList::-webkit-scrollbar        { width: 3px; }
+.messageList::-webkit-scrollbar-track  { background: transparent; }
+.messageList::-webkit-scrollbar-thumb  { background: #2a1e0e; border-radius: 2px; }
+
+/* ── Individual message ───────────────────────────────────────── */
+
+.msg {
+  margin-top: 14px;
+}
+.msg:first-child { margin-top: 0; }
+
+.msgGrouped {
+  margin-top: 3px;
+}
+
+.msgHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.msgAvatar {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  align-self: center;
+}
+
+.msgUser {
+  font-family: 'Cinzel', serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #c9a030;
+  letter-spacing: 0.04em;
+}
+.msgUserOwn { color: #6acc6a; }
+
+.msgTime {
+  font-size: 10px;
+  color: #3a2808;
+  font-style: italic;
+}
+
+.msgContent {
+  padding: 6px 10px;
+  background: rgba(26,18,8,0.45);
+  border: 1px solid #2a1e0e;
+  border-radius: 0 3px 3px 3px;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14.5px;
+  color: #c0aa70;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+  display: inline-block;
+  max-width: 80%;
+}
+
+.msgContentGrouped {
+  margin-left: 0;
+  border-radius: 3px;
+}
+
+.msgOwn .msgContent {
+  background: rgba(20,50,20,0.28);
+  border-color: #2a4a2a;
+  color: #98c88a;
+}
+
+/* ── Empty / loading states ───────────────────────────────────── */
+
+.emptyChat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #3a2808;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  text-align: center;
+  padding: 40px 20px;
+}
+.emptyChat p { margin: 0; }
+
+.noCampaign {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #3a2808;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  text-align: center;
+  padding: 40px 20px;
+}
+.noCampaign p { margin: 0; }
+
+.loadingMsgs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.loadingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3a2808;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.loadingDot:nth-child(2) { animation-delay: 0.2s; }
+.loadingDot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%       { opacity: 1;   transform: scale(1.1); }
+}
+
+/* ── Input area ───────────────────────────────────────────────── */
+
+.inputArea {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid #1e1608;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.25);
+}
+
+.input {
+  flex: 1;
+  background: rgba(26,18,8,0.7);
+  border: 1px solid #3a2808;
+  border-radius: 3px;
+  color: #e0cc90;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14.5px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  resize: none;
+  min-height: 38px;
+  max-height: 120px;
+  outline: none;
+  transition: border-color 0.15s;
+  overflow-y: auto;
+}
+.input::placeholder { color: #3a2808; }
+.input:focus        { border-color: #7a5c1e; }
+.input:disabled     { opacity: 0.5; }
+
+.input::-webkit-scrollbar        { width: 3px; }
+.input::-webkit-scrollbar-track  { background: transparent; }
+.input::-webkit-scrollbar-thumb  { background: #2a1e0e; border-radius: 2px; }
+
+.sendBtn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(184,134,11,0.12);
+  border: 1px solid #4a3510;
+  border-radius: 3px;
+  color: #7a5c1e;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sendBtn:hover:not(:disabled) {
+  background: rgba(184,134,11,0.25);
+  border-color: #b8860b;
+  color: #e8c040;
+}
+.sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Loading skeleton ─────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { opacity: 0.3; }
+  50%  { opacity: 0.6; }
+  100% { opacity: 0.3; }
+}
+
+.skeleton {
+  background: #1a1208;
+  animation: shimmer 1.8s ease-in-out infinite;
+}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { broadcastToChannel } from "@/lib/supabase/broadcast";
+import { createNotification } from "@/lib/notifications";
 
 // ── POST /api/guild/[campaignId]/request ───────────────────────
 // Sends a join request to the campaign owner.
@@ -24,7 +25,7 @@ export async function POST(
 
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id, user_id")
+    .select("id, user_id, name")
     .eq("id", campaignId)
     .single();
 
@@ -102,6 +103,14 @@ export async function POST(
 
   broadcastToChannel(`campaign:${campaignId}`, "request_created", { ...data });
   broadcastToChannel(`user-${campaign.user_id as string}`, "request_created", { ...data });
+
+  createNotification({
+    userId: campaign.user_id as string,
+    type: "join_request",
+    title: "Nueva solicitud de unión",
+    body: `${requester_username} quiere unirse con ${character.name as string}`,
+    data: { campaign_id: campaignId, campaign_name: campaign.name as string },
+  });
 
   return NextResponse.json(data, { status: 201 });
 }

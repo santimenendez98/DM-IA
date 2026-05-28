@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { getCurrUser, signOut } from "@/lib/auth";
 import { loader } from "@/lib/loader";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import NotificationsBell from "@/components/NotificationsBell";
 import type { Campaign } from "@/types/campaing";
 import type { Character } from "@/types/character";
 import type { JoinRequest } from "@/types/join-request";
@@ -181,6 +182,19 @@ const ACTIONS = [
       </svg>
     ),
   },
+  {
+    title: "Mensajes",
+    sub: "Coordina con tu grupo fuera de la partida",
+    href: "/messages",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+        <rect x="2" y="3" width="14" height="10" rx="2" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+        <path d="M5 13l-1.5 2.5" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+        <line x1="5" y1="7"  x2="13" y2="7"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+        <line x1="5" y1="10" x2="10" y2="10" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ];
 
 // ── Component ──────────────────────────────────────────────────
@@ -303,6 +317,7 @@ export default function Dashboard() {
                 <span className={s.userName}>{displayName}</span>
               </div>
             )}
+            {user && <NotificationsBell userId={user.id} />}
             <button className={s.btnLogout} onClick={handleLogout} disabled={loggingOut}>
               <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
                 <path d="M5 2H2v8h3" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" />
