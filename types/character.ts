@@ -17,6 +17,7 @@ export interface Character {
   max_hp: number;
   stats: CharacterStats;
   backstory: string | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +31,7 @@ export type CreateCharacterInput = {
   max_hp: number;
   stats?: CharacterStats;
   backstory?: string;
+  image_url?: string;
 };
 
 export type UpdateCharacterInput = Partial<CreateCharacterInput>;

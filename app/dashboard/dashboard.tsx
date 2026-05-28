@@ -4,9 +4,22 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getCurrUser, signOut } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Campaign } from "@/types/campaing";
 import type { Character } from "@/types/character";
+import type { JoinRequest } from "@/types/join-request";
+
+interface JoinedCampaign {
+  id: string;
+  name: string;
+  setting: string;
+  tone: string;
+  started_at: string | null;
+  my_characters: Array<{ id: string; name: string; class: string; level: number; image_url: string | null }>;
+}
 import { cx } from "@/components/cx";
+import GuildExplorer from "./guild-explorer";
+import JoinByCode from "./join-by-code";
 import s from "./dashboard.module.css";
 
 // ── Label maps ─────────────────────────────────────────────────
@@ -143,6 +156,18 @@ const ACTIONS = [
     ),
   },
   {
+    title: "Unirse con Código",
+    sub: "Ingresa a una campaña con código de sala",
+    href: null,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+        <rect x="3" y="8" width="12" height="9" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+        <path d="M6 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="9" cy="12.5" r="1.4" fill="#e8c040" />
+      </svg>
+    ),
+  },
+  {
     title: "Ver Historial",
     sub: "Revive las crónicas de tus partidas",
     href: null,
@@ -163,10 +188,14 @@ export default function Dashboard() {
   const [user, setUser]               = useState<User | null>(null);
   const [campaigns, setCampaigns]     = useState<Campaign[]>([]);
   const [characters, setCharacters]   = useState<Character[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
+  const [joinedCampaigns, setJoinedCampaigns] = useState<JoinedCampaign[]>([]);
   const [loading, setLoading]         = useState(true);
   const [loggingOut, setLoggingOut]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [guildOpen, setGuildOpen]     = useState(false);
+  const [joinCodeOpen, setJoinCodeOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -174,13 +203,18 @@ export default function Dashboard() {
       if (!u) { router.replace("/auth/login"); return; }
       setUser(u);
       try {
-        const [campaignsRes, charactersRes] = await Promise.all([
+        const [campaignsRes, charactersRes, requestsRes, joinedRes] = await Promise.all([
           fetch("/api/campaigns"),
           fetch("/api/characters"),
+          fetch("/api/campaigns/requests"),
+          fetch("/api/campaigns/joined"),
         ]);
         if (campaignsRes.ok)   setCampaigns(await campaignsRes.json());
         if (charactersRes.ok)  setCharacters(await charactersRes.json());
+        if (requestsRes.ok)    setPendingRequests(await requestsRes.json());
+        if (joinedRes.ok)      setJoinedCampaigns(await joinedRes.json());
       } catch { /* ignore — data stays empty */ }
+      loader.stop();
       setLoading(false);
     });
   }, [router]);
@@ -299,11 +333,12 @@ export default function Dashboard() {
             <button
               key={action.title}
               className={s.actionCard}
-              onClick={() =>
-                action.href
-                  ? router.push(action.href)
-                  : alert(`${action.title} — próximamente`)
-              }
+              onClick={() => {
+                if (action.href) { router.push(action.href); return; }
+                if (action.title === "Explorar el Gremio")  { setGuildOpen(true); return; }
+                if (action.title === "Unirse con Código")   { setJoinCodeOpen(true); return; }
+                alert(`${action.title} — próximamente`);
+              }}
             >
               <div className={s.actionCardIcon}>{action.icon}</div>
               <div className={s.actionCardText}>
@@ -347,9 +382,10 @@ export default function Dashboard() {
         ) : (
           <div className={s.campaignGrid}>
             {campaigns.map((c) => {
-              const isStarted   = c.started_at !== null;
-              const isDeleting  = deletingId === c.id;
+              const isStarted    = c.started_at !== null;
+              const isDeleting   = deletingId === c.id;
               const isConfirming = confirmDelete === c.id;
+              const pendingCount = pendingRequests.filter((r) => r.campaign_id === c.id).length;
               return (
                 <div
                   key={c.id}
@@ -358,7 +394,17 @@ export default function Dashboard() {
                 >
                   <div className={s.campaignCardTop} />
                   <div className={s.campaignInfo}>
-                    <div className={s.campaignName}>{c.name}</div>
+                    <div className={s.campaignNameRow}>
+                      <div className={s.campaignName}>{c.name}</div>
+                      {pendingCount > 0 && (
+                        <span
+                          className={s.requestBadge}
+                          title={`${pendingCount} solicitud${pendingCount > 1 ? "es" : ""} pendiente${pendingCount > 1 ? "s" : ""}`}
+                        >
+                          {pendingCount}
+                        </span>
+                      )}
+                    </div>
                     <div className={s.campaignMeta}>
                       <span className={cx(s.badge, SETTING_BADGE[c.setting])}>
                         {SETTING_LABELS[c.setting] ?? c.setting}
@@ -373,9 +419,23 @@ export default function Dashboard() {
                   <div className={s.campaignCardActions}>
                     <button
                       className={s.btnPlay}
-                      onClick={(e) => { e.stopPropagation(); router.push(`/campaigns/${c.id}`); }}
+                      onClick={(e) => { e.stopPropagation(); loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
                     >
-                      Abrir →
+                      Entrar →
+                    </button>
+                    <button
+                      className={s.btnManage}
+                      onClick={(e) => { e.stopPropagation(); loader.start(); router.push(`/campaigns/${c.id}`); }}
+                      title="Gestionar campaña"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                        <circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                        <circle cx="6" cy="6" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                        <line x1="6" y1="1.5" x2="6" y2="3.4"  stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                        <line x1="6" y1="8.6" x2="6" y2="10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                        <line x1="1.5" y1="6" x2="3.4" y2="6"  stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                        <line x1="8.6" y1="6" x2="10.5" y2="6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                      </svg>
                     </button>
                     {isConfirming ? (
                       <button
@@ -402,6 +462,69 @@ export default function Dashboard() {
               );
             })}
           </div>
+        )}
+
+        {/* Joined campaigns */}
+        {(loading || joinedCampaigns.length > 0) && (
+          <>
+            <div className={s.sectionTitle} style={{ marginTop: 36 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                <circle cx="7" cy="4.5" r="2.5" fill="none" stroke="#c9a030" strokeWidth="1.4" />
+                <path d="M1 13c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="none" stroke="#c9a030" strokeWidth="1.4" strokeLinecap="round" />
+                <line x1="10" y1="2" x2="10" y2="6" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
+                <line x1="8" y1="4" x2="12" y2="4" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
+              </svg>
+              Campañas como Jugador
+            </div>
+
+            {loading ? (
+              <div className={s.campaignGrid}>
+                {[0, 1].map((i) => (
+                  <div key={i} className={s.skeleton} style={{ height: 100, borderRadius: 3 }} />
+                ))}
+              </div>
+            ) : (
+              <div className={s.campaignGrid}>
+                {joinedCampaigns.map((c) => {
+                  const isStarted = c.started_at !== null;
+                  return (
+                    <div key={c.id} className={cx(s.campaignCard, isStarted && s.campaignCardActive)}>
+                      <div className={s.campaignCardTop} />
+                      <div className={s.campaignInfo}>
+                        <div className={s.campaignName}>{c.name}</div>
+                        <div className={s.campaignMeta}>
+                          <span className={cx(s.badge, SETTING_BADGE[c.setting])}>
+                            {SETTING_LABELS[c.setting] ?? c.setting}
+                          </span>
+                          <span className={s.badge}>{TONE_LABELS[c.tone] ?? c.tone}</span>
+                          <span className={cx(s.badge, isStarted ? s.badgeActive : s.badgePending)}>
+                            {isStarted ? "En Curso" : "Sin Comenzar"}
+                          </span>
+                        </div>
+                        {c.my_characters.length > 0 && (
+                          <div className={s.joinedChars}>
+                            {c.my_characters.map((ch) => (
+                              <span key={ch.id} className={s.joinedCharBadge}>
+                                {ch.name} · {ch.class} Nv.{ch.level}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className={s.campaignCardActions}>
+                        <button
+                          className={s.btnPlay}
+                          onClick={() => { loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
+                        >
+                          Entrar →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {/* Characters */}
@@ -437,6 +560,14 @@ export default function Dashboard() {
               return (
                 <div key={c.id} className={s.campaignCard}>
                   <div className={s.campaignCardTop} />
+                  <div className={s.charAvatar}>
+                    {c.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.image_url} alt={c.name} className={s.charAvatarImg} />
+                    ) : (
+                      c.name[0].toUpperCase()
+                    )}
+                  </div>
                   <div className={s.campaignInfo}>
                     <div className={s.campaignName}>{c.name}</div>
                     <div className={s.campaignMeta}>
@@ -510,6 +641,9 @@ export default function Dashboard() {
           );
         })()}
       </div>
+
+      <GuildExplorer open={guildOpen} onClose={() => setGuildOpen(false)} />
+      <JoinByCode open={joinCodeOpen} onClose={() => setJoinCodeOpen(false)} />
     </div>
   );
 }

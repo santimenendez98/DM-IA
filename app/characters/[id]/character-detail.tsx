@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { Character, CharacterStats } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import { cx } from "@/components/cx";
@@ -91,7 +92,7 @@ export default function CharacterDetail() {
         fetch("/api/campaigns"),
       ]);
 
-      if (!charRes.ok) { setNotFound(true); setLoading(false); return; }
+      if (!charRes.ok) { loader.stop(); setNotFound(true); setLoading(false); return; }
 
       const [char, camps] = await Promise.all([
         charRes.json() as Promise<Character>,
@@ -100,6 +101,7 @@ export default function CharacterDetail() {
 
       setCharacter(char);
       setCampaigns(camps);
+      loader.stop();
       setLoading(false);
     });
   }, [id, router]);
@@ -265,8 +267,18 @@ export default function CharacterDetail() {
             )}
           </div>
 
-          {/* ── Right: active campaigns ────────────────────────── */}
+          {/* ── Right: portrait + active campaigns ───────────── */}
           <div className={s.sidebar}>
+            {character.image_url && (
+              <div className={s.sidebarPortrait}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={character.image_url}
+                  alt={character.name}
+                  className={s.sidebarPortraitImg}
+                />
+              </div>
+            )}
             <div className={s.card}>
               <div className={s.cardHeader}>
                 <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>

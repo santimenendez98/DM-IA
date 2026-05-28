@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { loader } from "@/lib/loader";
 import type { CharacterStats } from "@/types/character";
 import { FieldError } from "@/components/FieldError";
 import { cx } from "@/components/cx";
@@ -265,6 +266,13 @@ export default function NewCharacter() {
   const [selectedBackground, setSelectedBackground] = useState("");
   const [backstory, setBackstory]                   = useState("");
 
+  // Image
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl]         = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError]     = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   // UI state
   const [errors, setErrors]       = useState<FormErrors>({});
   const [shake, setShake]         = useState(false);
@@ -273,11 +281,60 @@ export default function NewCharacter() {
   useEffect(() => {
     getCurrUser().then((u) => {
       if (!u) { router.replace("/auth/login"); return; }
+      loader.stop();
       setAuthLoading(false);
     });
   }, [router]);
 
   // ── Handlers ─────────────────────────────────────────────────
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setImageError("Solo se aceptan archivos de imagen.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("La imagen no puede superar los 5 MB.");
+      return;
+    }
+
+    setImageError(null);
+    setImagePreview(URL.createObjectURL(file));
+    setImageUploading(true);
+    setImageUrl(null);
+
+    try {
+      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", uploadPreset!);
+      formData.append("folder", "hearth-hall/characters");
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: "POST", body: formData },
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const data = (await res.json()) as { secure_url: string };
+      setImageUrl(data.secure_url);
+    } catch {
+      setImageError("No se pudo subir la imagen. Inténtalo de nuevo.");
+      setImagePreview(null);
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  function handleRemoveImage() {
+    setImagePreview(null);
+    setImageUrl(null);
+    setImageError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   function triggerShake() {
     setShake(true);
@@ -349,6 +406,7 @@ export default function NewCharacter() {
           max_hp: maxHp,
           stats,
           backstory: fullBackstory,
+          image_url: imageUrl ?? undefined,
         }),
       });
 
@@ -458,6 +516,89 @@ export default function NewCharacter() {
                   autoFocus
                 />
                 {errors.name && <FieldError message={errors.name} className={s.fieldError} iconColor="#d07070" />}
+              </div>
+
+              {/* Portrait */}
+              <div className={s.section}>
+                <div className={s.label}>
+                  Retrato del Personaje
+                  <span className={s.labelOptional}>&nbsp;— opcional</span>
+                </div>
+                <div className={s.portraitRow}>
+                  <div
+                    className={cx(s.portraitFrame, imagePreview && s.portraitFrameFilled)}
+                    onClick={() => !imageUploading && fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+                    aria-label="Subir retrato del personaje"
+                  >
+                    {imagePreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={imagePreview} alt="Retrato" className={s.portraitImg} />
+                    ) : (
+                      <div className={s.portraitPlaceholder}>
+                        <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>
+                          <circle cx="16" cy="11" r="5" fill="none" stroke="#7a5c1e" strokeWidth="1.5" />
+                          <path d="M5 29c0-6.1 4.9-11 11-11s11 4.9 11 11" fill="none" stroke="#7a5c1e" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                        <span className={s.portraitPlaceholderText}>Subir imagen</span>
+                      </div>
+                    )}
+                    {imageUploading && (
+                      <div className={s.portraitOverlay}>
+                        <span className={s.portraitSpinner} />
+                      </div>
+                    )}
+                  </div>
+                  <div className={s.portraitMeta}>
+                    <p className={s.portraitHint}>
+                      Sube un retrato para tu personaje. Se mostrará en la ficha y durante la partida.
+                    </p>
+                    <p className={s.portraitHint} style={{ opacity: 0.55, fontSize: "11px" }}>
+                      JPG, PNG o WebP · Máx. 5 MB
+                    </p>
+                    {imageUrl && !imageUploading && (
+                      <p className={s.portraitSuccess}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+                          <circle cx="6" cy="6" r="5" fill="none" stroke="#4a9a5a" strokeWidth="1.4" />
+                          <path d="M3.5 6l2 2 3-3.5" stroke="#4a9a5a" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Imagen subida
+                      </p>
+                    )}
+                    {imageError && (
+                      <p className={s.portraitError}>{imageError}</p>
+                    )}
+                    <div className={s.portraitActions}>
+                      <button
+                        type="button"
+                        className={s.portraitBtn}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={imageUploading}
+                      >
+                        {imagePreview ? "Cambiar imagen" : "Seleccionar archivo"}
+                      </button>
+                      {imagePreview && (
+                        <button
+                          type="button"
+                          className={s.portraitBtnRemove}
+                          onClick={handleRemoveImage}
+                          disabled={imageUploading}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className={s.hiddenInput}
+                  onChange={handleImageChange}
+                />
               </div>
 
               {/* Class */}

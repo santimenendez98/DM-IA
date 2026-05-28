@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, setting, tone, system_prompt } =
+  const { name, setting, tone, system_prompt, is_public } =
     body as Partial<CreateCampaignInput>;
 
   const fieldErrors: Record<string, string> = {};
@@ -97,6 +97,7 @@ export async function POST(req: Request) {
       setting,
       tone,
       system_prompt: system_prompt?.trim() ?? null,
+      is_public: is_public ?? false,
     })
     .select()
     .single();

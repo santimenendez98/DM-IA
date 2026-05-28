@@ -107,7 +107,37 @@
   font-weight: 700;
   color: #e8c040;
   flex-shrink: 0;
+  overflow: hidden;
   text-shadow: 0 0 12px rgba(232,192,64,0.4);
+}
+
+.heroAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sidebarPortrait {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px #3a2808,
+    0 0 0 3px #1a1008,
+    0 0 0 4px #7a5c1e,
+    0 8px 28px rgba(0,0,0,0.6);
+  margin-bottom: 16px;
+  background: #1a0e06;
+}
+
+.sidebarPortraitImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
 }
 
 .heroInfo { min-width: 0; }

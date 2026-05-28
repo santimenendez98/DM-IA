@@ -95,6 +95,7 @@ export async function POST(req: Request) {
     max_hp,
     stats,
     backstory,
+    image_url,
   } = body as Partial<CreateCharacterInput>;
 
   const fieldErrors: Record<string, string> = {};
@@ -148,6 +149,12 @@ export async function POST(req: Request) {
     );
   }
 
+  const safeImageUrl =
+    typeof image_url === "string" &&
+    image_url.startsWith("https://res.cloudinary.com/")
+      ? image_url
+      : null;
+
   const { data, error } = await supabase
     .from("characters")
     .insert({
@@ -159,6 +166,7 @@ export async function POST(req: Request) {
       max_hp: max_hp!,
       stats: stats ?? DEFAULT_STATS,
       backstory: backstory?.trim() ?? null,
+      image_url: safeImageUrl,
     })
     .select()
     .single();

@@ -1,8 +1,9 @@
 "use client";
 
 import { signIn } from "@/lib/auth";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { loader } from "@/lib/loader";
 
 import s from "./login.module.css";
 import { LoginErrors } from "@/types/login";
@@ -25,6 +26,8 @@ export default function Login() {
   const [errors, setErrors] = useState<LoginErrors>({});
   const [shake, setShake] = useState(false);
   const router = useRouter();
+
+  useEffect(() => { loader.stop(); }, []);
 
   function validate(): LoginErrors {
     const errs: LoginErrors = {};

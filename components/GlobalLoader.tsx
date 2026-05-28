@@ -46,12 +46,17 @@ function RouteWatcher() {
   const pathname     = usePathname();
   const searchParams = useSearchParams();
 
+  // Safety fallback: stop loader if the page never signals ready (e.g. unexpected error).
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    loader.stop();
+    clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = setTimeout(() => loader.stop(), 8000);
+    return () => clearTimeout(fallbackTimer.current);
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    function onAnchorClick(e: MouseEvent) {
+    // mousedown fires before click — starts the overlay the instant the user presses the button.
+    function onMouseDown(e: MouseEvent) {
       const a = (e.target as Element).closest("a") as HTMLAnchorElement | null;
       if (!a) return;
       const href = a.getAttribute("href") ?? "";
@@ -79,10 +84,10 @@ function RouteWatcher() {
       loader.start();
     };
 
-    document.addEventListener("click", onAnchorClick);
+    document.addEventListener("mousedown", onMouseDown);
 
     return () => {
-      document.removeEventListener("click", onAnchorClick);
+      document.removeEventListener("mousedown", onMouseDown);
       history.pushState    = origPush;
       history.replaceState = origReplace;
     };
