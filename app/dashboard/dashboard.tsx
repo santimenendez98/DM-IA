@@ -313,7 +313,12 @@ export default function Dashboard() {
               <div className={s.skeleton} style={{ width: 120, height: 32 }} />
             ) : (
               <div className={s.userBadge}>
-                <div className={s.userAvatar}>{initial}</div>
+                <div className={s.userAvatar}>
+                  {user?.user_metadata?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.user_metadata.avatar_url as string} alt={displayName} className={s.userAvatarImg} />
+                  ) : initial}
+                </div>
                 <span className={s.userName}>{displayName}</span>
               </div>
             )}

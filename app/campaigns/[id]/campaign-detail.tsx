@@ -493,7 +493,10 @@ export default function CampaignDetailPage() {
                 <div key={char.id} className={s.slot}>
                   <div className={s.slotTop} />
                   <div className={s.slotAvatar}>
-                    {char.name[0].toUpperCase()}
+                    {char.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={char.image_url} alt={char.name} className={s.slotAvatarImg} />
+                    ) : char.name[0].toUpperCase()}
                   </div>
                   <div className={s.slotInfo}>
                     <div className={s.slotName}>{char.name}</div>
@@ -602,7 +605,10 @@ export default function CampaignDetailPage() {
                               type="button"
                             >
                               <div className={s.dropAvatar}>
-                                {c.name[0].toUpperCase()}
+                                {c.image_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={c.image_url} alt={c.name} className={s.dropAvatarImg} />
+                                ) : c.name[0].toUpperCase()}
                               </div>
                               <div className={s.dropInfo}>
                                 <div className={s.dropName}>{c.name}</div>

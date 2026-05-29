@@ -252,6 +252,15 @@
   color: rgba(255, 255, 255, 0.9);
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.15);
+  overflow: hidden;
+}
+
+.charAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .charInfo { flex: 1; min-width: 0; }
@@ -499,6 +508,15 @@
   flex-shrink: 0;
   margin-top: 2px;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+
+.msgCharAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .msgCharBody {
@@ -802,6 +820,15 @@
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.voterAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .voterName {
@@ -999,6 +1026,330 @@
 }
 .sendErrorClose:hover { opacity: 1; }
 
+/* ── Rolls panel ──────────────────────────────────────────────── */
+
+.rollsPanel {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(184, 134, 11, 0.35);
+  border-bottom: 1px solid rgba(184, 134, 11, 0.12);
+  background: linear-gradient(160deg, rgba(24, 14, 2, 0.99) 0%, rgba(14, 8, 1, 0.99) 100%);
+  padding: 12px 16px 14px;
+}
+
+.rollsPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.rollsPanelTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* List of roll rows */
+
+.rollsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rollItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(184, 134, 11, 0.2);
+  border-radius: 3px;
+  flex-wrap: wrap;
+}
+
+.rollItemDone {
+  border-color: rgba(184, 134, 11, 0.4);
+  background: rgba(184, 134, 11, 0.06);
+}
+
+.rollItemOther {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.rollItemInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rollItemChar {
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #b8860b;
+  background: rgba(184, 134, 11, 0.12);
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  border-radius: 9px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.rollItemType {
+  font-family: 'Crimson Text', serif;
+  font-size: 0.96rem;
+  color: #d4c090;
+}
+
+.rollItemFormula {
+  font-size: 0.72rem;
+  color: #4a3818;
+  font-style: italic;
+}
+
+/* Controls (my rolls) */
+
+.rollItemControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rollItemResult {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rollItemDie {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #c9a030;
+}
+
+.rollItemMod {
+  font-size: 0.72rem;
+  color: #5a4020;
+}
+
+.rollItemEq {
+  font-size: 0.75rem;
+  color: #3a2810;
+}
+
+.rollItemTotal {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e8c040;
+  text-shadow: 0 0 10px rgba(232, 192, 64, 0.3);
+}
+
+.rollItemSuccess {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #5cad78;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rollItemFail {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #c06060;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rollItemBtn {
+  padding: 5px 13px;
+  border: 1px solid rgba(184, 134, 11, 0.4);
+  background: rgba(184, 134, 11, 0.07);
+  color: #b8960a;
+  font-family: 'Cinzel', serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.rollItemBtn:hover:not(:disabled) {
+  background: rgba(184, 134, 11, 0.14);
+  border-color: rgba(184, 134, 11, 0.65);
+  color: #e8c040;
+}
+.rollItemBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@keyframes rollShake {
+  0%   { transform: rotate(0deg) scale(1); }
+  25%  { transform: rotate(-14deg) scale(1.1); }
+  50%  { transform: rotate(14deg) scale(1.1); }
+  75%  { transform: rotate(-7deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.rollItemBtnRolling { animation: rollShake 0.38s ease; }
+
+/* Waiting label (other players' rolls) */
+
+.rollItemWaiting {
+  font-size: 0.72rem;
+  color: #3a2810;
+  font-style: italic;
+}
+
+/* Note shown to non-leaders */
+
+.rollsPanelNote {
+  font-size: 0.78rem;
+  color: #5a4828;
+  font-style: italic;
+  text-align: center;
+  padding: 8px 0 2px;
+  margin: 0;
+}
+
+/* Send button */
+
+.rollsPanelSend {
+  width: 100%;
+  padding: 9px 16px;
+  border: 1px solid rgba(184, 134, 11, 0.6);
+  background: linear-gradient(135deg, rgba(184, 134, 11, 0.15) 0%, rgba(122, 92, 30, 0.08) 100%);
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 8px rgba(184, 134, 11, 0.08);
+}
+.rollsPanelSend:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(184, 134, 11, 0.24) 0%, rgba(122, 92, 30, 0.14) 100%);
+  box-shadow: 0 0 18px rgba(184, 134, 11, 0.18);
+  border-color: rgba(184, 134, 11, 0.85);
+}
+.rollsPanelSend:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: #6a5020;
+  border-color: rgba(184, 134, 11, 0.2);
+}
+
+/* ── Rate limit notice ────────────────────────────────────────── */
+
+.rateLimitNote {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(30, 14, 2, 0.75);
+  border-left: 2px solid rgba(192, 122, 32, 0.6);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.rateLimitIcon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.rateLimitBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rateLimitTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.63rem;
+  font-weight: 700;
+  color: #c07a20;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rateLimitText {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.9rem;
+  color: #8a6840;
+  font-style: italic;
+}
+
+.rateLimitTimer {
+  color: #e8a040;
+  font-style: normal;
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+}
+
+/* ── Level up notice ──────────────────────────────────────────── */
+
+.levelUpNote {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(14, 28, 4, 0.80);
+  border-left: 2px solid rgba(140, 200, 60, 0.55);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.levelUpIcon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.levelUpBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.levelUpEntry {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.levelUpName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #a8d060;
+  letter-spacing: 0.04em;
+}
+
+.levelUpText {
+  color: #7a9850;
+  font-style: italic;
+}
+
+.levelUpLevel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #b8e070;
+}
+
 /* ── Input area ───────────────────────────────────────────────── */
 
 .inputArea {
@@ -1081,57 +1432,60 @@
 .sendButtons {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
+  min-width: 88px;
 }
 
 .btnSpeak {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   justify-content: center;
-  padding: 6px 13px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: #6a5838;
+  padding: 9px 14px;
+  border: 1px solid rgba(184, 134, 11, 0.22);
+  background: rgba(184, 134, 11, 0.04);
+  color: #8a7050;
   font-family: 'Cinzel', serif;
-  font-size: 0.67rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
 .btnSpeak:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #9a8060;
-  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(184, 134, 11, 0.45);
+  color: #c9a030;
+  background: rgba(184, 134, 11, 0.08);
 }
 .btnSpeak:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .btnAct {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   justify-content: center;
-  padding: 8px 14px;
-  border: 1px solid rgba(184, 134, 11, 0.55);
-  background: rgba(184, 134, 11, 0.1);
+  padding: 10px 14px;
+  border: 1px solid rgba(184, 134, 11, 0.6);
+  background: linear-gradient(160deg, rgba(184,134,11,0.14) 0%, rgba(122,92,30,0.08) 100%);
   color: #e8c040;
   font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  box-shadow: 0 0 8px rgba(184,134,11,0.08);
 }
 .btnAct:hover:not(:disabled) {
-  background: rgba(184, 134, 11, 0.18);
-  border-color: rgba(184, 134, 11, 0.75);
-  box-shadow: 0 0 10px rgba(184, 134, 11, 0.12);
+  background: linear-gradient(160deg, rgba(184,134,11,0.22) 0%, rgba(122,92,30,0.14) 100%);
+  border-color: rgba(184, 134, 11, 0.85);
+  box-shadow: 0 0 16px rgba(184, 134, 11, 0.18);
+  color: #f0d060;
 }
 .btnAct:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -1638,6 +1992,6 @@
   }
 
   .sendButtons {
-    flex-direction: row;
+    min-width: unset;
   }
 }

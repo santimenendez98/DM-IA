@@ -444,8 +444,11 @@ export default function Lobby() {
                   return (
                     <div key={char.id} className={cx(s.charCard, isMe && s.charCardMe)}>
                       <div className={s.charTop}>
-                        <div className={s.charAvatar} style={{ background: color }}>
-                          {char.name[0].toUpperCase()}
+                        <div className={s.charAvatar} style={char.image_url ? {} : { background: color }}>
+                          {char.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={char.image_url} alt={char.name} className={s.charAvatarImg} />
+                          ) : char.name[0].toUpperCase()}
                         </div>
                         <div className={s.charInfo}>
                           <div className={s.charName}>{char.name}</div>

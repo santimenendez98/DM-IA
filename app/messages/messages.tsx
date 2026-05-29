@@ -237,7 +237,7 @@ export default function Messages() {
     <div className={s.page}>
       <div className={s.stars} aria-hidden />
 
-      <div className={s.layout}>
+      <div className={`${s.layout}${selectedId ? ` ${s.layoutChat}` : ""}`}>
         {/* ── Sidebar ── */}
         <aside className={s.sidebar}>
           <div className={s.sidebarHeader}>
@@ -298,6 +298,17 @@ export default function Messages() {
             <>
               <div className={s.chatHeader}>
                 <div className={s.chatHeaderInner}>
+                  <button
+                    className={s.mobileChatBack}
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    aria-label="Volver a campañas"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                      <path d="M7 1L3 5L7 9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Volver
+                  </button>
                   <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
                     <rect x="1" y="2" width="12" height="8" rx="1.5" fill="none" stroke="#c9a030" strokeWidth="1.2" />
                     <path d="M4 10l-1.5 2" stroke="#c9a030" strokeWidth="1.2" strokeLinecap="round" />

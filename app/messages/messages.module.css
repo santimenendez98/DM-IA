@@ -39,6 +39,11 @@
   overflow: hidden;
 }
 
+/* Mobile back button (hidden on desktop) */
+.mobileChatBack {
+  display: none;
+}
+
 /* ── Sidebar ──────────────────────────────────────────────────── */
 
 .sidebar {
@@ -389,6 +394,80 @@
   color: #e8c040;
 }
 .sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Responsive ───────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  /* Panel switching: show sidebar OR chat, one at a time */
+  .layout {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    z-index: 10;
+    border-right: none;
+    border-bottom: none;
+    transform: translateX(0);
+    transition: transform 0.22s ease;
+  }
+
+  .chatPanel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+  }
+
+  /* When campaign is selected, slide sidebar out and chat in */
+  .layoutChat .sidebar   { transform: translateX(-100%); }
+  .layoutChat .chatPanel { transform: translateX(0); }
+
+  /* Show mobile back button */
+  .mobileChatBack {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: 1px solid #2e2010;
+    border-radius: 2px;
+    color: #5c4828;
+    font-family: 'Cinzel', serif;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .mobileChatBack:hover { color: #c9a030; border-color: #7a5c1e; }
+
+  /* Chat header adjusts */
+  .chatHeaderInner { gap: 8px; }
+  .chatTitle { font-size: 11px; }
+
+  /* Input area adjustments */
+  .inputArea { padding: 10px 12px; gap: 8px; }
+  .input { font-size: 14px; }
+  .sendBtn { width: 34px; height: 34px; flex-shrink: 0; }
+
+  /* Message bubbles */
+  .msgContent { max-width: 92%; font-size: 14px; }
+  .messageList { padding: 14px 12px 6px; }
+}
+
+@media (max-width: 400px) {
+  .sidebarHeader { padding: 12px 10px 10px; gap: 8px; }
+  .sidebarTitle { font-size: 10px; }
+  .campaignItem { padding: 10px 12px; }
+  .campaignItemName { font-size: 10px; }
+}
 
 /* ── Loading skeleton ─────────────────────────────────────────── */
 

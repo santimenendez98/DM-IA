@@ -173,7 +173,10 @@ export default function CharacterDetail() {
           <div className={s.heroBody}>
             <div className={s.heroLeft}>
               <div className={s.heroAvatar}>
-                {character.name[0].toUpperCase()}
+                {character.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={character.image_url} alt={character.name} className={s.heroAvatarImg} />
+                ) : character.name[0].toUpperCase()}
               </div>
               <div className={s.heroInfo}>
                 <h1 className={s.heroName}>{character.name}</h1>

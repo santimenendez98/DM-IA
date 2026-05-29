@@ -17,6 +17,19 @@ interface CampaignDetail extends Campaign {
   characters: Character[];
 }
 
+interface HpUpdateItem {
+  character_id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+}
+
+interface LevelUpItem {
+  character_id: string;
+  name: string;
+  level: number;
+}
+
 // ── Constants ──────────────────────────────────────────────────
 
 const STAT_KEYS: (keyof CharacterStats)[] = [
@@ -55,6 +68,52 @@ const TONE_LABELS: Record<string, string> = {
   gritty: "Crudo", whimsical: "Caprichoso",
 };
 
+// ── Roll-request types & helpers ───────────────────────────────
+
+interface RollRequest {
+  dado: string;
+  mod: "FUE" | "DES" | "CON" | "INT" | "SAB" | "CAR" | null;
+  bono_prof: boolean;
+  tipo: string;
+  cd: number | null;
+  personaje: string | null;
+}
+
+const STAT_FROM_ABBR: Record<string, keyof CharacterStats> = {
+  FUE: "strength", DES: "dexterity", CON: "constitution",
+  INT: "intelligence", SAB: "wisdom", CAR: "charisma",
+};
+
+function parseRollRequests(content: string): { text: string; rolls: RollRequest[] } {
+  const rolls: RollRequest[] = [];
+  // Matches all variations the AI might emit:
+  //   TIRADA_JUGADOR:{...}
+  //   TIRADA_JUGADOR: {...}
+  //   [TIRADA_JUGADOR optional text: {...}]
+  //   [TIRADA_JUGADOR:{...}]
+  const cleaned = content
+    .replace(/\[?TIRADA_JUGADOR[^\{]*(\{[^}]+\})\]?/g, (_match, jsonPart: string) => {
+      try { rolls.push(JSON.parse(jsonPart) as RollRequest); } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text: cleaned, rolls };
+}
+
+function rollDice(notation: string): number {
+  const m = notation.match(/^(\d+)d(\d+)$/i);
+  if (!m) return 0;
+  let total = 0;
+  const sides = parseInt(m[2], 10);
+  for (let i = 0; i < parseInt(m[1], 10); i++) total += Math.floor(Math.random() * sides) + 1;
+  return total;
+}
+
+function calcProfBonus(level: number): number {
+  return Math.floor((level - 1) / 4) + 2;
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
 function statMod(score: number): string {
@@ -88,8 +147,11 @@ function CharacterCard({
   return (
     <div className={cx(s.charCard, active && s.charCardActive)} onClick={onClick}>
       <div className={s.charTop}>
-        <div className={s.charAvatar} style={{ background: color }}>
-          {character.name[0].toUpperCase()}
+        <div className={s.charAvatar} style={character.image_url ? {} : { background: color }}>
+          {character.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={character.image_url} alt={character.name} className={s.charAvatarImg} />
+          ) : character.name[0].toUpperCase()}
         </div>
         <div className={s.charInfo}>
           <div className={s.charName}>{character.name}</div>
@@ -144,7 +206,8 @@ function CharacterCard({
 // ── DM message ─────────────────────────────────────────────────
 
 function DmMessage({ message }: { message: Message }) {
-  const paragraphs = message.content.split(/\n\n+/).filter(Boolean);
+  const { text } = parseRollRequests(message.content);
+  const paragraphs = text.split(/\n\n+/).filter(Boolean);
   return (
     <div className={s.msgDm}>
       <div className={s.msgDmHeader}>
@@ -161,7 +224,7 @@ function DmMessage({ message }: { message: Message }) {
       <div className={s.msgDmBody}>
         {paragraphs.length > 1
           ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
-          : <p>{message.content}</p>}
+          : <p>{text}</p>}
       </div>
     </div>
   );
@@ -172,15 +235,20 @@ function DmMessage({ message }: { message: Message }) {
 function CharMessage({
   message,
   color,
+  imageUrl,
 }: {
   message: Message;
   color: string;
+  imageUrl?: string | null;
 }) {
   const name = message.character_name ?? "Aventurero";
   return (
     <div className={s.msgChar}>
-      <div className={s.msgCharAvatar} style={{ background: color }}>
-        {name[0].toUpperCase()}
+      <div className={s.msgCharAvatar} style={imageUrl ? {} : { background: color }}>
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={name} className={s.msgCharAvatarImg} />
+        ) : name[0].toUpperCase()}
       </div>
       <div className={s.msgCharBody}>
         <div className={s.msgCharHeader}>
@@ -190,6 +258,215 @@ function CharMessage({
           <span className={s.msgTime}>{fmtTime(message.created_at)}</span>
         </div>
         <div className={s.msgCharBubble}>{message.content}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Rolls panel (one or many simultaneous player rolls) ────────
+
+function RollsPanel({
+  requests,
+  myCharNames,
+  charsByName,
+  sharedRolls,
+  isLeader,
+  onRoll,
+  onSend,
+  disabled,
+}: {
+  requests: RollRequest[];
+  myCharNames: Set<string>;
+  charsByName: Map<string, Character>;
+  sharedRolls: Record<string, number>;
+  isLeader: boolean;
+  onRoll: (charName: string, diceRoll: number) => void;
+  onSend: (msg: string) => void;
+  disabled: boolean;
+}) {
+  const [rolling, setRolling] = useState<boolean[]>(() => requests.map(() => false));
+
+  const allDone = requests.every((r) => sharedRolls[r.personaje ?? "_"] !== undefined);
+  const pendingCount = requests.filter((r) => sharedRolls[r.personaje ?? "_"] === undefined).length;
+
+  function handleRoll(i: number) {
+    const r = requests[i];
+    setRolling((prev) => { const n = [...prev]; n[i] = true; return n; });
+    setTimeout(() => {
+      onRoll(r.personaje ?? "_", rollDice(r.dado));
+      setRolling((prev) => { const n = [...prev]; n[i] = false; return n; });
+    }, 380);
+  }
+
+  function buildMessage() {
+    return requests.map((r) => {
+      const key = r.personaje ?? "_";
+      const dr = sharedRolls[key];
+      if (dr === undefined) return null;
+      const char = r.personaje ? charsByName.get(r.personaje) : null;
+      const statKey = r.mod ? STAT_FROM_ABBR[r.mod] : null;
+      const score = statKey && char ? char.stats[statKey] : 10;
+      const mod = Math.floor((score - 10) / 2);
+      const pb = r.bono_prof && char ? calcProfBonus(char.level) : 0;
+      const total = dr + mod + pb;
+      const success = r.cd !== null ? total >= r.cd : null;
+      const modPart = r.mod ? ` + ${r.mod}(${mod >= 0 ? "+" : ""}${mod})` : "";
+      const profPart = pb > 0 ? ` + Prof(+${pb})` : "";
+      const cdPart = r.cd != null ? ` vs CD ${r.cd}` : "";
+      const outcome = success !== null ? (success ? " → ✓ Éxito" : " → ✗ Fallo") : "";
+      const who = r.personaje ? `${r.personaje} — ` : "";
+      return `[TIRADA — ${who}${r.tipo}: ${r.dado}(${dr})${modPart}${profPart} = ${total}${cdPart}${outcome}]`;
+    }).filter(Boolean).join("\n");
+  }
+
+  return (
+    <div className={s.rollsPanel}>
+      <div className={s.rollsPanelHeader}>
+        <svg width="13" height="13" viewBox="0 0 20 20" aria-hidden>
+          <rect x="2" y="2" width="16" height="16" rx="3" fill="none" stroke="#b8860b" strokeWidth="1.5" />
+          <circle cx="7" cy="7" r="1.3" fill="#e8c040" />
+          <circle cx="13" cy="7" r="1.3" fill="#e8c040" />
+          <circle cx="7" cy="13" r="1.3" fill="#e8c040" />
+          <circle cx="13" cy="13" r="1.3" fill="#e8c040" />
+          <circle cx="10" cy="10" r="1.3" fill="#e8c040" />
+        </svg>
+        <span className={s.rollsPanelTitle}>
+          {requests.length === 1 ? "Tirada requerida" : `${requests.length} tiradas requeridas`}
+        </span>
+      </div>
+
+      <div className={s.rollsList}>
+        {requests.map((r, i) => {
+          const key = r.personaje ?? "_";
+          const isMine = !r.personaje || myCharNames.has(r.personaje);
+          const char = r.personaje ? charsByName.get(r.personaje) : null;
+          const statKey = r.mod ? STAT_FROM_ABBR[r.mod] : null;
+          const score = statKey && char ? char.stats[statKey] : 10;
+          const mod = Math.floor((score - 10) / 2);
+          const pb = r.bono_prof && char ? calcProfBonus(char.level) : 0;
+          const dr = sharedRolls[key];
+          const total = dr !== undefined ? dr + mod + pb : null;
+          const success = total !== null && r.cd !== null ? total >= r.cd : null;
+          const done = dr !== undefined;
+
+          return (
+            <div key={i} className={cx(s.rollItem, done && s.rollItemDone, !isMine && !done && s.rollItemOther)}>
+              <div className={s.rollItemInfo}>
+                {r.personaje && <span className={s.rollItemChar}>{r.personaje}</span>}
+                <span className={s.rollItemType}>{r.tipo}</span>
+                <span className={s.rollItemFormula}>
+                  {r.dado}{r.mod && ` + ${r.mod}`}{r.bono_prof && " + Prof"}{r.cd != null && ` · CD ${r.cd}`}
+                </span>
+              </div>
+
+              <div className={s.rollItemControls}>
+                {done && (
+                  <div className={s.rollItemResult}>
+                    <span className={s.rollItemDie}>{dr}</span>
+                    {r.mod && <span className={s.rollItemMod}>+{r.mod}({mod >= 0 ? "+" : ""}{mod})</span>}
+                    {pb > 0 && <span className={s.rollItemMod}>+Prof(+{pb})</span>}
+                    <span className={s.rollItemEq}>=</span>
+                    <span className={s.rollItemTotal}>{total}</span>
+                    {success !== null && (
+                      <span className={success ? s.rollItemSuccess : s.rollItemFail}>
+                        {success ? "✓" : "✗"}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isMine ? (
+                  <button
+                    className={cx(s.rollItemBtn, rolling[i] && s.rollItemBtnRolling)}
+                    onClick={() => handleRoll(i)}
+                    disabled={disabled || rolling[i]}
+                    type="button"
+                  >
+                    {rolling[i] ? "···" : !done ? `Tirar ${r.dado}` : "Retirar"}
+                  </button>
+                ) : !done ? (
+                  <span className={s.rollItemWaiting}>En espera...</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {isLeader ? (
+        <button
+          className={s.rollsPanelSend}
+          onClick={() => onSend(buildMessage())}
+          disabled={!allDone || disabled}
+          type="button"
+        >
+          {allDone ? "Enviar resultados al DM" : `Esperando ${pendingCount} tirada${pendingCount !== 1 ? "s" : ""}...`}
+        </button>
+      ) : (
+        <p className={s.rollsPanelNote}>
+          El líder enviará los resultados al DM cuando todos hayan tirado.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Rate limit notice (shown in chat when Gemini quota is hit) ─
+
+function DmRateLimitNote({
+  secsLeft,
+  limitType,
+}: {
+  secsLeft: number;
+  limitType: "minute" | "day";
+}) {
+  return (
+    <div className={s.rateLimitNote}>
+      <div className={s.rateLimitIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="#c07a20" strokeWidth="1.3" />
+          <line x1="8" y1="5" x2="8" y2="9" stroke="#c07a20" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="8" cy="11.2" r="0.9" fill="#c07a20" />
+        </svg>
+      </div>
+      <div className={s.rateLimitBody}>
+        <span className={s.rateLimitTitle}>Límite de consultas alcanzado</span>
+        {limitType === "day" ? (
+          <span className={s.rateLimitText}>
+            Se alcanzó el <strong>límite diario</strong> de consultas.
+            La partida podrá continuar mañana.
+          </span>
+        ) : (
+          <span className={s.rateLimitText}>
+            Demasiadas consultas seguidas. El Dungeon Master podrá responder en{" "}
+            <strong className={s.rateLimitTimer}>{secsLeft}s</strong>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Level up notice (shown in chat when a character levels up) ─
+
+function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
+  return (
+    <div className={s.levelUpNote}>
+      <div className={s.levelUpIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <polygon
+            points="8,1.5 9.8,6.2 15,6.2 10.7,9.3 12.4,14 8,11 3.6,14 5.3,9.3 1,6.2 6.2,6.2"
+            fill="none" stroke="#b8d060" strokeWidth="1.2" strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <div className={s.levelUpBody}>
+        {updates.map((u) => (
+          <div key={u.character_id} className={s.levelUpEntry}>
+            <span className={s.levelUpName}>{u.name}</span>
+            <span className={s.levelUpText}> ha alcanzado el </span>
+            <span className={s.levelUpLevel}>Nivel {u.level}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -301,8 +578,11 @@ function VoteModal({
               : uid === campaign.user_id ? "Dungeon Master" : "Aventurero";
             return (
               <div key={uid} className={s.voterRow}>
-                <div className={s.voterAvatar} style={{ background: color }}>
-                  {name[0].toUpperCase()}
+                <div className={s.voterAvatar} style={firstChar?.image_url ? {} : { background: color }}>
+                  {firstChar?.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={firstChar.image_url} alt={name} className={s.voterAvatarImg} />
+                  ) : name[0].toUpperCase()}
                 </div>
                 <span className={s.voterName}>{name}</span>
                 {uid === activeVote.proposer_id && (
@@ -623,6 +903,11 @@ export default function Play() {
   const [typingUsers, setTypingUsers] = useState<Map<string, { name: string; color: string }>>(new Map());
   const [activeVote, setActiveVote] = useState<ActiveVote | null>(null);
   const [voteCountdown, setVoteCountdown] = useState(0);
+  const [sharedRolls, setSharedRolls] = useState<Record<string, number>>({});
+  const [actCooldown, setActCooldown] = useState(0);
+  const [rateLimitSecsLeft, setRateLimitSecsLeft] = useState(0);
+  const [rateLimitType, setRateLimitType] = useState<"minute" | "day" | null>(null);
+  const [levelUpQueue, setLevelUpQueue] = useState<LevelUpItem[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -637,9 +922,13 @@ export default function Play() {
   const isTypingRef       = useRef(false);
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const voteTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const voteIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeVoteRef   = useRef<ActiveVote | null>(null);
+  const voteTimeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voteIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeVoteRef      = useRef<ActiveVote | null>(null);
+  const activeRollMsgIdRef   = useRef<string | null>(null);
+  const cooldownIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevDmThinkingRef    = useRef(false);
+  const rateLimitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { campaignRef.current = campaign; }, [campaign]);
   useEffect(() => { userIdRef.current   = userId;   }, [userId]);
   useEffect(() => { activeVoteRef.current = activeVote; }, [activeVote]);
@@ -653,14 +942,22 @@ export default function Play() {
       return;
     }
 
+    // AbortController cancels in-flight requests when React Strict Mode
+    // unmounts + remounts the component, preventing the intro from firing twice.
+    const controller = new AbortController();
+    const { signal } = controller;
+
     getCurrUser().then(async (u) => {
+      if (signal.aborted) return;
       if (!u) { router.replace("/auth/login"); return; }
       setUserId(u.id);
 
       const [campRes, msgsRes] = await Promise.all([
-        fetch(`/api/campaigns/${id}`),
-        fetch(`/api/campaigns/${id}/messages`),
+        fetch(`/api/campaigns/${id}`, { signal }),
+        fetch(`/api/campaigns/${id}/messages`, { signal }),
       ]);
+
+      if (signal.aborted) return;
 
       if (!campRes.ok) {
         setNotFound(true);
@@ -674,10 +971,11 @@ export default function Play() {
         msgsRes.ok ? (msgsRes.json() as Promise<Message[]>) : Promise.resolve([]),
       ]);
 
+      if (signal.aborted) return;
+
       setCampaign(camp);
       setMessages(msgs);
       if (camp.characters.length > 0) {
-        // Prefer the user's own character; fall back to the first in the party.
         const myChar = camp.characters.find((c) => c.user_id === u.id);
         setActiveCharId((myChar ?? camp.characters[0]).id);
       }
@@ -693,7 +991,9 @@ export default function Play() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dm_intro: true }),
+            signal,
           });
+          if (signal.aborted) return;
           if (introRes.ok) {
             const data = await introRes.json() as { dm_response?: Message };
             if (data.dm_response) {
@@ -703,17 +1003,22 @@ export default function Play() {
               });
             }
           } else if (introRes.status === 409) {
-            // Another tab already triggered it — fetch the saved message.
-            const savedRes = await fetch(`/api/campaigns/${camp.id}/messages`);
-            if (savedRes.ok) setMessages(await savedRes.json() as Message[]);
+            // Another instance already triggered it — fetch the saved message.
+            const savedRes = await fetch(`/api/campaigns/${camp.id}/messages`, { signal });
+            if (!signal.aborted && savedRes.ok) setMessages(await savedRes.json() as Message[]);
           }
-        } catch {
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return;
           // Non-fatal.
         } finally {
-          setDmThinking(false);
+          if (!signal.aborted) setDmThinking(false);
         }
       }
+    }).catch((err) => {
+      if ((err as Error)?.name !== "AbortError") throw err;
     });
+
+    return () => controller.abort();
   }, [id, router]);
 
   // ── Auto-scroll ────────────────────────────────────────────
@@ -757,14 +1062,20 @@ export default function Play() {
       })
       .on("broadcast", { event: "dm_thinking" }, () => {
         setDmThinking(true);
+        setLevelUpQueue([]);
       })
       .on("broadcast", { event: "dm_response" }, ({ payload }) => {
-        const msg = payload as Message;
+        const { hp_updates, level_updates, ...msg } = payload as Message & {
+          hp_updates?: HpUpdateItem[];
+          level_updates?: LevelUpItem[];
+        };
         setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+          if (prev.some((m) => m.id === (msg as Message).id)) return prev;
+          return [...prev, msg as Message];
         });
         setDmThinking(false);
+        if (hp_updates?.length) applyHpUpdates(hp_updates);
+        if (level_updates?.length) applyLevelUpdates(level_updates);
       })
       // ── Broadcast: player typing indicators ──────────────────
       .on("broadcast", { event: "typing_start" }, ({ payload }) => {
@@ -830,6 +1141,20 @@ export default function Play() {
         setActiveVote(null);
         setVoteCountdown(0);
       })
+      // ── Broadcast: rate limit notice (shown to all players) ──
+      .on("broadcast", { event: "rate_limit" }, ({ payload }) => {
+        const { limit_type, retry_in } = payload as { limit_type: "minute" | "day"; retry_in: number };
+        startRateLimitCountdown(limit_type ?? "minute", retry_in ?? 0);
+      })
+      // ── Broadcast: shared player roll result ──────────────────
+      .on("broadcast", { event: "player_roll" }, ({ payload }) => {
+        const { charName, diceRoll, msgId } = payload as {
+          charName: string; diceRoll: number; msgId: string | null;
+        };
+        if (msgId === activeRollMsgIdRef.current) {
+          setSharedRolls((prev) => ({ ...prev, [charName]: diceRoll }));
+        }
+      })
       // ── Postgres Changes: fallback if migration is applied ────
       .on(
         "postgres_changes",
@@ -871,6 +1196,7 @@ export default function Play() {
       typingTimeoutsRef.current.clear();
       if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
       if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+      if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
     };
   }, [campaign?.id, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1012,7 +1338,7 @@ export default function Play() {
     setInput("");
     setSendError(null);
     setSending(true);
-    if (withDm) setDmThinking(true);
+    if (withDm) { setDmThinking(true); setLevelUpQueue([]); }
 
     try {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`, {
@@ -1031,6 +1357,10 @@ export default function Play() {
         message: Message;
         dm_response?: Message;
         dm_error?: string;
+        limit_type?: "minute" | "day";
+        retry_in?: number;
+        hp_updates?: HpUpdateItem[];
+        level_updates?: LevelUpItem[];
       };
 
       setMessages((prev) => {
@@ -1041,7 +1371,21 @@ export default function Play() {
         return next;
       });
 
-      if (data.dm_error) setSendError(data.dm_error);
+      if (data.hp_updates?.length) applyHpUpdates(data.hp_updates);
+      if (data.level_updates?.length) applyLevelUpdates(data.level_updates);
+
+      if (data.dm_error === "rate_limit") {
+        const limitType = data.limit_type ?? "minute";
+        const retryIn   = data.retry_in ?? 0;
+        startRateLimitCountdown(limitType, retryIn);
+        channelRef.current?.send({
+          type: "broadcast",
+          event: "rate_limit",
+          payload: { limit_type: limitType, retry_in: retryIn },
+        }).catch(() => {});
+      } else if (data.dm_error) {
+        setSendError(data.dm_error);
+      }
     } catch {
       setSendError("Error de conexión. Inténtalo de nuevo.");
     } finally {
@@ -1055,7 +1399,7 @@ export default function Play() {
   // Multi-player (at least one character owned by someone else) → confirm first.
 
   const handleActRequest = useCallback(() => {
-    if (!input.trim() || sending || dmThinking || !campaign || !activeCharId) return;
+    if (!input.trim() || sending || dmThinking || actCooldown > 0 || !campaign || !activeCharId) return;
     const charIsOwned = campaign.characters.some(
       (c) => c.id === activeCharId && c.user_id === userId,
     );
@@ -1110,7 +1454,7 @@ export default function Play() {
       event: "vote_start",
       payload: { proposer_id: userId, character_id: activeCharId, character_name, content, voter_ids },
     });
-  }, [input, sending, dmThinking, campaign, activeCharId, userId, handleSend]);
+  }, [input, sending, dmThinking, actCooldown, campaign, activeCharId, userId, handleSend]);
 
   const castVote = useCallback((vote: boolean) => {
     const uid = userIdRef.current;
@@ -1186,6 +1530,120 @@ export default function Play() {
     [],
   );
 
+  // ── Apply HP updates to local campaign state ──────────────────
+
+  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, hp: upd.hp } : c;
+        }),
+      };
+    });
+  }, []);
+
+  // ── Apply level-up updates to local campaign state ────────────
+
+  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, level: upd.level } : c;
+        }),
+      };
+    });
+    setLevelUpQueue(updates);
+  }, []);
+
+  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
+
+  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
+    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
+    setRateLimitType(limitType);
+
+    if (limitType === "day" || secs === 0) {
+      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
+      setRateLimitSecsLeft(0);
+      setActCooldown(30);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else {
+      setRateLimitSecsLeft(secs);
+      setActCooldown(secs);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setRateLimitSecsLeft((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+        setActCooldown((c) => Math.max(0, c - 1));
+      }, 1000);
+    }
+  }, []);
+
+  // ── Player roll handler (broadcasts to other players) ─────
+
+  const handlePlayerRoll = useCallback((charName: string, diceRoll: number) => {
+    setSharedRolls((prev) => ({ ...prev, [charName]: diceRoll }));
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "player_roll",
+      payload: { charName, diceRoll, msgId: activeRollMsgIdRef.current },
+    }).catch(() => {});
+  }, []);
+
+  // ── Cooldown after DM responds (prevents rate-limit spam) ─
+
+  const COOLDOWN_SECS = 5;
+  useEffect(() => {
+    const wasThinkinng = prevDmThinkingRef.current;
+    prevDmThinkingRef.current = dmThinking;
+    if (wasThinkinng && !dmThinking) {
+      // DM just finished — start cooldown
+      if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+      setActCooldown(COOLDOWN_SECS);
+      cooldownIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) { clearInterval(cooldownIntervalRef.current!); return 0; }
+          return c - 1;
+        });
+      }, 1000);
+    }
+    return () => {};
+  }, [dmThinking]);
+
+  // ── Reset shared rolls when a new DM roll-request arrives ─
+
+  useEffect(() => {
+    const lastMsgLocal = messages[messages.length - 1];
+    if (!dmThinking && lastMsgLocal?.role === "dm") {
+      const rolls = parseRollRequests(lastMsgLocal.content).rolls;
+      if (rolls.length > 0 && lastMsgLocal.id !== activeRollMsgIdRef.current) {
+        activeRollMsgIdRef.current = lastMsgLocal.id;
+        setSharedRolls({});
+      }
+    }
+  }, [messages, dmThinking]);
+
   // ── Loading ────────────────────────────────────────────────
 
   if (loading) {
@@ -1216,12 +1674,27 @@ export default function Play() {
 
   // ── Derived ────────────────────────────────────────────────
 
+  const isLeader = campaign.user_id === userId;
+
   // Characters the current user can speak as (owned by them)
   const myChars = campaign.characters.filter((c) => c.user_id === userId);
   const activeChar = campaign.characters.find((c) => c.id === activeCharId);
   const charColorMap = Object.fromEntries(
     campaign.characters.map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
   );
+  const charImgMap = Object.fromEntries(
+    campaign.characters.map((c) => [c.id, c.image_url]),
+  );
+
+  // Detect pending roll requests from last DM message
+  const lastMsg = messages[messages.length - 1];
+  const pendingRolls =
+    !dmThinking && lastMsg?.role === "dm"
+      ? parseRollRequests(lastMsg.content).rolls
+      : [];
+
+  const myCharNames = new Set(myChars.map((c) => c.name));
+  const charsByName = new Map(campaign.characters.map((c) => [c.name, c]));
 
   // ── JSX ────────────────────────────────────────────────────
 
@@ -1408,6 +1881,7 @@ export default function Play() {
                     key={msg.id}
                     message={msg}
                     color={charColorMap[msg.character_id ?? ""] ?? AVATAR_COLORS[0]}
+                    imageUrl={charImgMap[msg.character_id ?? ""] ?? null}
                   />
                 ),
               )
@@ -1417,6 +1891,12 @@ export default function Play() {
               <TypingIndicator key={charId} name={name} color={color} />
             ))}
             {dmThinking && <DmThinking />}
+            {!dmThinking && rateLimitType !== null && (
+              <DmRateLimitNote secsLeft={rateLimitSecsLeft} limitType={rateLimitType} />
+            )}
+            {!dmThinking && levelUpQueue.length > 0 && (
+              <LevelUpNote updates={levelUpQueue} />
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -1431,6 +1911,21 @@ export default function Play() {
               <span>{sendError}</span>
               <button className={s.sendErrorClose} onClick={() => setSendError(null)}>✕</button>
             </div>
+          )}
+
+          {/* Rolls panel */}
+          {pendingRolls.length > 0 && (
+            <RollsPanel
+              key={lastMsg?.id}
+              requests={pendingRolls}
+              myCharNames={myCharNames}
+              charsByName={charsByName}
+              sharedRolls={sharedRolls}
+              isLeader={isLeader}
+              onRoll={handlePlayerRoll}
+              onSend={(msg) => handleSend(true, msg)}
+              disabled={sending || dmThinking}
+            />
           )}
 
           {/* Input area */}
@@ -1490,7 +1985,7 @@ export default function Play() {
                 <button
                   className={s.btnAct}
                   onClick={handleActRequest}
-                  disabled={!input.trim() || sending || dmThinking}
+                  disabled={!input.trim() || sending || dmThinking || actCooldown > 0}
                   type="button"
                   title="Actuar e invocar al DM (Ctrl+Enter)"
                 >
@@ -1502,7 +1997,7 @@ export default function Play() {
                       <polyline points="6,3 11,3 11,8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
-                  {sending ? "Enviando..." : "Actuar"}
+                  {sending ? "Enviando..." : actCooldown > 0 ? `${actCooldown}s` : "Actuar"}
                 </button>
               </div>
             </div>

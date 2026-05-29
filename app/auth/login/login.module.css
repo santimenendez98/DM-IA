@@ -351,3 +351,17 @@
   font-style: italic;
   letter-spacing: 0.04em;
 }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  .bg { padding: 20px 12px; align-items: flex-start; padding-top: 32px; }
+  .cardBody { padding: 28px 22px 24px; }
+  .title { font-size: 17px; }
+  .torchLeft, .torchRight { display: none; }
+}
+
+@media (max-width: 360px) {
+  .cardBody { padding: 22px 16px 20px; }
+  .title { font-size: 15px; }
+}

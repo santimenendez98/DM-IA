@@ -193,6 +193,15 @@
   color: #e8c040;
   flex-shrink: 0;
   margin: 12px auto 8px;
+  overflow: hidden;
+}
+
+.slotAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .slotInfo {
@@ -415,6 +424,15 @@
   font-weight: 700;
   color: #e8c040;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dropAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .dropInfo { flex: 1; min-width: 0; }
@@ -852,8 +870,18 @@
   .slots { grid-template-columns: repeat(2, 1fr); }
   .heroBody { padding: 20px; }
   .heroName { font-size: 18px; }
+  .content { padding: 20px 16px 60px; }
+  .inviteBody { gap: 10px; padding: 14px 16px; }
+  .inviteCode { font-size: 20px; letter-spacing: 0.25em; }
+  .requestCard { flex-direction: column; gap: 10px; }
+  .requestActions { flex-direction: row; justify-content: flex-end; }
+  .ctaBtn { padding: 12px 24px; font-size: 11px; }
 }
 
 @media (max-width: 420px) {
   .slots { grid-template-columns: 1fr 1fr; }
+  .content { padding: 16px 12px 50px; }
+  .heroName { font-size: 16px; }
+  .inviteCode { font-size: 17px; letter-spacing: 0.2em; }
+  .inviteBody { flex-direction: column; align-items: flex-start; }
 }

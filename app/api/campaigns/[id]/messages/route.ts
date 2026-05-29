@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { broadcastToChannel } from "@/lib/supabase/broadcast";
-import { callGeminiDM } from "@/lib/gemini";
+import { callDM, DmRateLimitError } from "@/lib/openrouter";
 import type { Character } from "@/types/character";
+
+export const maxDuration = 60; // seconds — requires Vercel Pro for >10s, free up to 10s on Hobby
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -23,6 +25,15 @@ const TONE_LABELS: Record<string, string> = {
   whimsical: "Caprichoso",
 };
 
+function abilityMod(score: number): string {
+  const m = Math.floor((score - 10) / 2);
+  return m >= 0 ? `+${m}` : `${m}`;
+}
+
+function proficiencyBonus(level: number): number {
+  return Math.floor((level - 1) / 4) + 2;
+}
+
 function buildSystemInstruction(
   campaign: {
     name: string;
@@ -36,26 +47,122 @@ function buildSystemInstruction(
   const tone = TONE_LABELS[campaign.tone] ?? campaign.tone;
 
   const partyList = characters
-    .map((c) => `- ${c.name}, ${c.class} nivel ${c.level} (PV: ${c.hp}/${c.max_hp})`)
+    .map((c) => {
+      const s = c.stats;
+      const pb = proficiencyBonus(c.level);
+      return (
+        `- ${c.name} (${c.class} Nv.${c.level} | PV ${c.hp}/${c.max_hp} | Prob. +${pb})\n` +
+        `  FUE ${abilityMod(s.strength)} DES ${abilityMod(s.dexterity)} CON ${abilityMod(s.constitution)} ` +
+        `INT ${abilityMod(s.intelligence)} SAB ${abilityMod(s.wisdom)} CAR ${abilityMod(s.charisma)}`
+      );
+    })
     .join("\n");
 
-  return [
-    `Eres el Dungeon Master (DM) de una campaña de rol llamada "${campaign.name}".`,
-    `Escenario: ${setting}. Tono: ${tone}.`,
-    campaign.system_prompt
-      ? `\nInstrucciones especiales: ${campaign.system_prompt}`
-      : "",
-    `\nAventureros en la partida:\n${partyList}`,
-    `\nDirectrices:`,
-    `- Narra el mundo, los NPCs y las consecuencias de las acciones con viveza y detalle.`,
-    `- Mantén el tono "${tone}" en todo momento.`,
-    `- No interrumpas conversaciones entre personajes a menos que el entorno o un NPC reaccione.`,
-    `- Cuando un personaje realiza una acción, describe su resultado e introduce nuevas posibilidades.`,
-    `- Sé conciso pero evocador. Responde siempre en español.`,
-    `- Termina SIEMPRE con una situación abierta, un dilema o una pregunta implícita que invite a los jugadores a actuar. Nunca resuelvas por ellos el siguiente paso.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const lines = [
+    `Eres el DM de la campaña "${campaign.name}". Escenario: ${setting}. Tono: ${tone}.`,
+    campaign.system_prompt ? `Instrucciones especiales: ${campaign.system_prompt}` : "",
+    `\nGRUPO:\n${partyList}`,
+
+    `\n── DADOS D&D 5e ──`,
+
+    `NPCs/MONSTRUOS — resuelves tú inline:`,
+    `[🎲 1d20+MOD = TOTAL → resultado]. Natural 20 = crítico (daño doble), natural 1 = fallo.`,
+    `Iniciativa: 1d20+DES, ordena de mayor a menor. Ataque: 1d20+atributo+Prof vs CA (base 10+DES).`,
+    `A 0 PV el personaje cae; narra la caída y anuncia PV restantes.`,
+
+    `\nJUGADORES — propones tú SOLO cuando sea necesario, ellos tiran en el panel:`,
+    `CUÁNDO pedir tirada: únicamente cuando la acción tenga riesgo real Y el fallo tenga consecuencias interesantes.`,
+    `NO pedir tirada para: caminar, hablar con aliados, acciones triviales, cosas que el personaje haría sin esfuerzo dado su nivel/clase.`,
+    `La mayoría de interacciones narrativas y de diálogo NO requieren dados. Sé selectivo; menos tiradas = mejor ritmo.`,
+    `\nCuando SÍ corresponde, narra la situación y añade AL FINAL, en línea propia, EXACTAMENTE así (sin corchetes, sin texto antes del JSON):`,
+    `TIRADA_JUGADOR:{"dado":"1d20","mod":"DES","bono_prof":true,"tipo":"Sigilo","cd":15,"personaje":"Nombre"}`,
+    `Campos: dado="1d20"|"2d6"|etc · mod="FUE"|"DES"|"CON"|"INT"|"SAB"|"CAR"|null · bono_prof=bool · tipo=texto · cd=número|null · personaje=nombre|null`,
+    `Una línea por personaje. NO narres el resultado antes de recibirlo.`,
+    `Recibirás: [TIRADA — Nombre — Tipo: xdY(N)+MOD = TOTAL vs CD Z → Éxito/Fallo]. Entonces narra la consecuencia.`,
+    `Si el jugador ya incluye su tirada ("saco un 17"), úsala directamente.`,
+    `CDs: Fácil 10 · Moderado 15 · Difícil 20 · Muy difícil 25.`,
+
+    `\nHP — cuando un personaje sufra o recupere PV, añade AL FINAL (una línea por afectado, sin corchetes):`,
+    `HP_UPDATE:{"personaje":"Nombre","hp":15}`,
+    `"hp" = PV exactos tras el cambio (mínimo 0, máximo PV máx del personaje). Descanso largo: restaura todos a PV máximos con una HP_UPDATE por personaje.`,
+
+    `\nNIVEL — cuando un personaje suba de nivel (por hitos o experiencia), anuncia el logro en la narración y añade AL FINAL (una línea por afectado, sin corchetes):`,
+    `LEVEL_UP:{"personaje":"Nombre","nivel":5}`,
+    `Solo cuando el avance de la historia lo justifique. "nivel" = nuevo nivel del personaje (2–20).`,
+
+    `\n── NARRATIVA ──`,
+    `Párrafos cortos (3-4 oraciones). Oraciones directas. Lenguaje accesible; 3-6 párrafos por respuesta.`,
+    `Termina siempre con situación abierta que invite a actuar. No decidas por los jugadores. Responde en español.`,
+  ];
+
+  return lines.filter(Boolean).join("\n");
+}
+
+interface HpUpdateItem {
+  character_id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+}
+
+function parseHpUpdates(
+  content: string,
+  characters: Character[],
+): { text: string; updates: HpUpdateItem[] } {
+  const updates: HpUpdateItem[] = [];
+  const text = content
+    .replace(/HP_UPDATE:\s*\{[^}]+\}/g, (match) => {
+      try {
+        const json = JSON.parse(match.slice("HP_UPDATE:".length).trim()) as {
+          personaje: string;
+          hp: number;
+        };
+        const char = characters.find(
+          (c) => c.name.toLowerCase() === json.personaje.toLowerCase(),
+        );
+        if (char) {
+          const hp = Math.max(0, Math.min(Math.round(json.hp), char.max_hp));
+          updates.push({ character_id: char.id, name: char.name, hp, max_hp: char.max_hp });
+        }
+      } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, updates };
+}
+
+interface LevelUpItem {
+  character_id: string;
+  name: string;
+  level: number;
+}
+
+function parseLevelUps(
+  content: string,
+  characters: Character[],
+): { text: string; updates: LevelUpItem[] } {
+  const updates: LevelUpItem[] = [];
+  const text = content
+    .replace(/LEVEL_UP:\s*\{[^}]+\}/g, (match) => {
+      try {
+        const json = JSON.parse(match.slice("LEVEL_UP:".length).trim()) as {
+          personaje: string;
+          nivel: number;
+        };
+        const char = characters.find(
+          (c) => c.name.toLowerCase() === json.personaje.toLowerCase(),
+        );
+        const nivel = Math.round(json.nivel);
+        if (char && nivel >= 2 && nivel <= 20) {
+          updates.push({ character_id: char.id, name: char.name, level: nivel });
+        }
+      } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, updates };
 }
 
 function flattenMessage(row: Record<string, unknown>) {
@@ -228,15 +335,15 @@ export async function POST(
 
     const introInstruction =
       buildSystemInstruction(campaign, characters) +
-      "\n\nEsta es la introducción inicial de la aventura. Sin esperar ninguna acción del jugador, narra la escena de apertura: describe el lugar, la atmósfera, los sonidos y olores del entorno, y cómo los aventureros se encuentran al comienzo de la historia. Capta la atención desde el primer momento. Termina la introducción con una situación inmediata que exija la atención o decisión de los aventureros: una amenaza visible, un personaje que los interpela directamente, o un evento que requiera respuesta. El primer movimiento debe quedar en manos de los jugadores.";
+      "\n\nEsta es la introducción inicial de la aventura. Narra la escena de apertura sin esperar ninguna acción del jugador. Describe el lugar, el ambiente y cómo los aventureros llegan al inicio de la historia. Escribe en párrafos cortos y directos: máximo 3 o 4 oraciones por párrafo. Usa lenguaje accesible que mantenga la atmósfera sin volverse difícil de leer. Termina con una situación concreta que exija la atención o decisión de los jugadores: una amenaza visible, un personaje que los interpela, o un evento que requiera respuesta. El primer movimiento debe quedar en sus manos.";
 
     let dmContent: string;
     try {
-      dmContent = await callGeminiDM(introInstruction, [
+      dmContent = await callDM(introInstruction, [
         { role: "user", content: "Comienza la aventura." },
       ]);
     } catch (e) {
-      console.error("Gemini intro error:", e);
+      console.error("OpenRouter intro error:", e);
       return NextResponse.json(
         { error: "El Dungeon Master no pudo iniciar la aventura." },
         { status: 500 },
@@ -349,13 +456,13 @@ export async function POST(
   const characters = partyRows.map((r) => r.characters) as Character[];
   const systemInstruction = buildSystemInstruction(campaign, characters);
 
-  // Fetch up to 40 recent messages for context (includes the one just inserted)
+  // Fetch up to 20 recent messages for context (includes the one just inserted)
   const { data: historyRows } = await admin
     .from("campaign_messages")
     .select("role, content, characters(name)")
     .eq("campaign_id", campaignId)
     .order("created_at", { ascending: false })
-    .limit(40);
+    .limit(20);
 
   const history = (historyRows ?? [])
     .slice()
@@ -374,36 +481,59 @@ export async function POST(
       };
     });
 
-  // Gemini requires the conversation to start with a "user" turn.
+  // The conversation must start with a "user" turn.
   // The DM intro is stored as the first message (role "dm"), so we prepend
   // a synthetic user prompt to satisfy the API constraint.
-  const geminiHistory: typeof history =
+  const dmHistory: typeof history =
     history[0]?.role === "dm"
       ? [{ role: "user", content: "Comienza la aventura." }, ...history]
       : history;
 
   let dmContent: string;
   try {
-    dmContent = await callGeminiDM(systemInstruction, geminiHistory);
+    dmContent = await callDM(systemInstruction, dmHistory);
   } catch (e) {
-    console.error("Gemini error:", e);
+    console.error("OpenRouter error:", e);
+    if (e instanceof DmRateLimitError) {
+      return NextResponse.json(
+        {
+          message: charMsgFlat,
+          dm_error: "rate_limit",
+          limit_type: e.limitType,
+          retry_in: e.retrySeconds,
+        },
+        { status: 201 },
+      );
+    }
     return NextResponse.json(
-      {
-        message: charMsgFlat,
-        dm_error: "El Dungeon Master no pudo responder en este momento.",
-      },
+      { message: charMsgFlat, dm_error: "El Dungeon Master no pudo responder en este momento." },
       { status: 201 },
     );
   }
 
-  // Insert DM response
+  // Parse HP_UPDATE and LEVEL_UP markers, strip them, update characters in DB
+  const { text: afterHp, updates: hpUpdates } = parseHpUpdates(dmContent, characters);
+  const { text: cleanDmContent, updates: levelUpdates } = parseLevelUps(afterHp, characters);
+
+  const dbUpdates = [
+    ...hpUpdates.map(({ character_id, hp }) =>
+      admin.from("characters").update({ hp }).eq("id", character_id),
+    ),
+    ...levelUpdates.map(({ character_id, level }) =>
+      admin.from("characters").update({ level }).eq("id", character_id),
+    ),
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (dbUpdates.length > 0) await Promise.all(dbUpdates as any[]);
+
+  // Insert DM response (without markers)
   const { data: dmMsg, error: dmInsertError } = await admin
     .from("campaign_messages")
     .insert({
       campaign_id: campaignId,
       character_id: null,
       role: "dm",
-      content: dmContent,
+      content: cleanDmContent,
       turn_number: turn_number + 1,
     })
     .select()
@@ -414,12 +544,20 @@ export async function POST(
     return NextResponse.json({ message: charMsgFlat }, { status: 201 });
   }
 
-  broadcastToChannel(`play:${campaignId}`, "dm_response", { ...dmMsg, character_name: null });
+  const dmResponsePayload = {
+    ...dmMsg,
+    character_name: null,
+    hp_updates: hpUpdates,
+    level_updates: levelUpdates,
+  };
+  broadcastToChannel(`play:${campaignId}`, "dm_response", dmResponsePayload);
 
   return NextResponse.json(
     {
       message: charMsgFlat,
-      dm_response: { ...dmMsg, character_name: null },
+      dm_response: dmResponsePayload,
+      hp_updates: hpUpdates,
+      level_updates: levelUpdates,
     },
     { status: 201 },
   );
