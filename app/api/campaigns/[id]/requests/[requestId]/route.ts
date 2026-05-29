@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
+import { createNotification } from "@/lib/notifications";
 
 const MAX_PARTY = 4;
 
@@ -30,7 +32,7 @@ export async function PATCH(
 
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, name")
     .eq("id", campaignId)
     .eq("user_id", user.id)
     .single();
@@ -109,6 +111,35 @@ export async function PATCH(
         }
       }
     }
+
+    broadcastToChannel(`lobby:${campaignId}`,    "player_joined", { campaign_id: campaignId });
+    broadcastToChannel(`campaign:${campaignId}`, "party_changed", { campaign_id: campaignId });
+  }
+
+  broadcastToChannel(`campaign:${campaignId}`, "request_updated", { id: requestId, status });
+  broadcastToChannel(
+    `user-${request.requester_id as string}`,
+    "request_decision",
+    { campaign_id: campaignId, status },
+  );
+
+  const campaignName = campaign.name as string;
+  if (status === "accepted") {
+    createNotification({
+      userId: request.requester_id as string,
+      type: "request_accepted",
+      title: "¡Solicitud aceptada!",
+      body: `Fuiste aceptado en "${campaignName}". ¡Entra a la sala de espera!`,
+      data: { campaign_id: campaignId, campaign_name: campaignName },
+    });
+  } else {
+    createNotification({
+      userId: request.requester_id as string,
+      type: "request_rejected",
+      title: "Solicitud rechazada",
+      body: `Tu solicitud para unirte a "${campaignName}" fue rechazada.`,
+      data: { campaign_id: campaignId, campaign_name: campaignName },
+    });
   }
 
   return NextResponse.json({ status });

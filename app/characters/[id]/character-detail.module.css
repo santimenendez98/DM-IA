@@ -41,7 +41,6 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 24px;
   padding: 0;
   background: none;
   border: none;
@@ -516,6 +515,77 @@
   color: #6b5535;
 }
 
+/* ── Top bar ─────────────────────────────────────────────────── */
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnDanger {
+  padding: 7px 16px;
+  background: transparent;
+  border: 1px solid #5a2020;
+  border-radius: 2px;
+  color: #8b4040;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btnDanger:hover:not(:disabled) { border-color: #b83030; color: #c05050; background: rgba(122,32,32,0.1); }
+.btnDanger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnDangerConfirm {
+  border-color: #b83030 !important;
+  color: #e08080 !important;
+  background: rgba(122,32,32,0.15) !important;
+}
+
+.btnDangerCancel {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #6b5535;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btnDangerCancel:hover:not(:disabled) { border-color: #7a5c1e; color: #c9a030; }
+.btnDangerCancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Error banner ────────────────────────────────────────────── */
+
+.errorBanner {
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  background: rgba(122,32,32,0.15);
+  border: 1px solid #5a2020;
+  border-radius: 3px;
+  color: #c07070;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
 /* ── Buttons ─────────────────────────────────────────────────── */
 
 .btnSecondary {
@@ -588,14 +658,26 @@
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 780px) {
-  .layout  { grid-template-columns: 1fr; }
+  .layout   { grid-template-columns: 1fr; }
   .statGrid { grid-template-columns: repeat(3, 1fr); }
   .heroBody { flex-direction: column; align-items: flex-start; }
   .heroHp   { width: 100%; }
+  .content  { padding: 20px 16px 60px; }
+  .sidebarPortrait { max-width: 260px; margin: 0 auto 16px; }
 }
 
 @media (max-width: 480px) {
-  .heroBody { padding: 20px; }
-  .statGrid { grid-template-columns: repeat(2, 1fr); }
-  .heroName { font-size: 18px; }
+  .heroBody   { padding: 18px 16px; gap: 16px; }
+  .heroAvatar { width: 52px; height: 52px; font-size: 20px; }
+  .heroName   { font-size: 18px; }
+  .statGrid   { grid-template-columns: repeat(2, 1fr); }
+  .content    { padding: 16px 12px 50px; }
+  .campaignItem { flex-wrap: wrap; }
+  .campaignItemAction { width: 100%; }
+  .assignBtn  { width: 100%; text-align: center; }
+}
+
+@media (max-width: 360px) {
+  .heroName   { font-size: 16px; }
+  .statGrid   { grid-template-columns: repeat(2, 1fr); }
 }

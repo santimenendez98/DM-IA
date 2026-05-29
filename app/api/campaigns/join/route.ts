@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
+import { createNotification } from "@/lib/notifications";
 
 const MAX_PARTY = 4;
 
@@ -85,6 +87,22 @@ export async function POST(req: NextRequest) {
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
+
+  broadcastToChannel(`lobby:${campaign.id}`,    "player_joined", { campaign_id: campaign.id });
+  broadcastToChannel(`campaign:${campaign.id}`, "party_changed", { campaign_id: campaign.id });
+
+  const joinerUsername =
+    (user.user_metadata?.username as string | undefined) ??
+    user.email?.split("@")[0] ??
+    "Un aventurero";
+
+  createNotification({
+    userId: campaign.user_id as string,
+    type: "player_joined",
+    title: "Nuevo aventurero en tu campaña",
+    body: `${joinerUsername} se unió a "${campaign.name as string}" con código de sala.`,
+    data: { campaign_id: campaign.id as string, campaign_name: campaign.name as string },
+  });
 
   return NextResponse.json({
     campaign_id: campaign.id,

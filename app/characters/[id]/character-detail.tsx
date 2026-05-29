@@ -82,6 +82,9 @@ export default function CharacterDetail() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading]     = useState(true);
   const [notFound, setNotFound]   = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting]   = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrUser().then(async (u) => {
@@ -149,6 +152,23 @@ export default function CharacterDetail() {
     );
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/characters/${id}`, { method: "DELETE" });
+      if (res.status === 204) {
+        router.push("/dashboard");
+        return;
+      }
+      const body = await res.json() as { error?: string; campaign_id?: string };
+      setDeleteError(body.error ?? "No se pudo eliminar el personaje.");
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const { race, background, story } = parseBackstory(character.backstory);
   const hpPct = Math.min(100, Math.round((character.hp / character.max_hp) * 100));
 
@@ -159,13 +179,46 @@ export default function CharacterDetail() {
       <div className={s.stars} aria-hidden />
 
       <div className={s.content}>
-        <button className={s.back} onClick={() => router.push("/dashboard")} type="button">
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-            <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Volver al Salón
-        </button>
+        <div className={s.topBar}>
+          <button className={s.back} onClick={() => router.push("/dashboard")} type="button">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+              <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Volver al Salón
+          </button>
+
+          <div className={s.topBarRight}>
+            {deleteConfirm ? (
+              <>
+                <button
+                  className={cx(s.btnDanger, s.btnDangerConfirm)}
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  type="button"
+                >
+                  {deleting ? "Eliminando..." : "¿Eliminar?"}
+                </button>
+                <button
+                  className={s.btnDangerCancel}
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                  type="button"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <button
+                className={s.btnDanger}
+                onClick={() => { setDeleteConfirm(true); setDeleteError(null); }}
+                type="button"
+              >
+                Eliminar personaje
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* ── Hero header ──────────────────────────────────────── */}
         <div className={s.hero}>
@@ -173,7 +226,10 @@ export default function CharacterDetail() {
           <div className={s.heroBody}>
             <div className={s.heroLeft}>
               <div className={s.heroAvatar}>
-                {character.name[0].toUpperCase()}
+                {character.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={character.image_url} alt={character.name} className={s.heroAvatarImg} />
+                ) : character.name[0].toUpperCase()}
               </div>
               <div className={s.heroInfo}>
                 <h1 className={s.heroName}>{character.name}</h1>
@@ -202,9 +258,16 @@ export default function CharacterDetail() {
                   style={{ width: `${hpPct}%` }}
                 />
               </div>
+
             </div>
           </div>
         </div>
+
+        {deleteError && (
+          <div className={s.errorBanner}>
+            {deleteError}
+          </div>
+        )}
 
         <div className={s.layout}>
           {/* ── Left: character sheet ───────────────────────────── */}

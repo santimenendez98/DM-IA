@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastToChannel } from "@/lib/supabase/broadcast";
+import { createNotification } from "@/lib/notifications";
 
 // ── DELETE /api/campaigns/[id]/characters/[charId] ────────────
 // Removes a character from the campaign party.
@@ -21,7 +24,7 @@ export async function DELETE(
   // but an explicit check gives a clearer 404 vs 403 error).
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, name")
     .eq("id", campaignId)
     .eq("user_id", user.id)
     .single();
@@ -33,6 +36,14 @@ export async function DELETE(
     );
   }
 
+  // Fetch character owner before deletion so we can notify them.
+  const admin = createAdminClient();
+  const { data: expelledChar } = await admin
+    .from("characters")
+    .select("user_id")
+    .eq("id", charId)
+    .single();
+
   const { error } = await supabase
     .from("campaign_characters")
     .delete()
@@ -42,6 +53,23 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  if (expelledChar) {
+    const expelledUserId = expelledChar.user_id as string;
+    broadcastToChannel(`lobby:${campaignId}`, "player_expelled", {
+      character_id: charId,
+      user_id: expelledUserId,
+    });
+    createNotification({
+      userId: expelledUserId,
+      type: "expelled",
+      title: "Has sido expulsado del grupo",
+      body: `El Dungeon Master te retiró de "${campaign.name as string}".`,
+      data: { campaign_id: campaignId, campaign_name: campaign.name as string },
+    });
+  }
+  broadcastToChannel(`campaign:${campaignId}`, "party_changed", { campaign_id: campaignId });
+  broadcastToChannel(`lobby:${campaignId}`,    "party_changed", { campaign_id: campaignId });
 
   return new NextResponse(null, { status: 204 });
 }

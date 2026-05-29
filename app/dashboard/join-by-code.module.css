@@ -239,3 +239,10 @@
   line-height: 1.6;
 }
 .successMsg strong { color: #c9a888; font-style: normal; }
+
+.successActions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}

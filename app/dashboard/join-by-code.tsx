@@ -1,22 +1,27 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { loader } from "@/lib/loader";
 import type { Character } from "@/types/character";
 import s from "./join-by-code.module.css";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  onJoined?: () => void;
 }
 
 type Step = "form" | "success";
 
-export default function JoinByCode({ open, onClose }: Props) {
+export default function JoinByCode({ open, onClose, onJoined }: Props) {
+  const router = useRouter();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [code, setCode]             = useState("");
   const [charId, setCharId]         = useState("");
   const [step, setStep]             = useState<Step>("form");
   const [campaignName, setCampaignName] = useState("");
+  const [campaignId, setCampaignId]    = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -48,19 +53,21 @@ export default function JoinByCode({ open, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.trim(), character_id: charId }),
       });
-      const data = await res.json().catch(() => ({})) as { campaign_name?: string; error?: string };
+      const data = await res.json().catch(() => ({})) as { campaign_name?: string; campaign_id?: string; error?: string };
       if (!res.ok) {
         setError(data.error ?? "Error al unirse a la campaña.");
         return;
       }
       setCampaignName(data.campaign_name ?? "la campaña");
+      setCampaignId(data.campaign_id ?? "");
       setStep("success");
+      onJoined?.();
     } catch {
       setError("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
-  }, [code, charId]);
+  }, [code, charId, onJoined]);
 
   if (!open) return null;
 
@@ -164,11 +171,24 @@ export default function JoinByCode({ open, onClose }: Props) {
               <h2 className={s.successTitle}>¡Bienvenido al grupo!</h2>
               <p className={s.successMsg}>
                 Te has unido a <strong>{campaignName}</strong>.<br />
-                El DM puede comenzar la aventura desde la página de la campaña.
+                Entra a la sala de espera para aguardar al Dungeon Master.
               </p>
-              <button className={s.joinBtn} onClick={onClose} type="button">
-                Cerrar
-              </button>
+              <div className={s.successActions}>
+                <button className={s.cancelBtn} onClick={onClose} type="button">
+                  Cerrar
+                </button>
+                <button
+                  className={s.joinBtn}
+                  onClick={() => {
+                    onClose();
+                    loader.start();
+                    router.push(`/campaigns/${campaignId}/lobby`);
+                  }}
+                  type="button"
+                >
+                  Ir a la Sala →
+                </button>
+              </div>
             </div>
           )}
         </div>

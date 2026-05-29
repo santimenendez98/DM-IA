@@ -404,3 +404,19 @@
   font-style: italic;
   letter-spacing: 0.04em;
 }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  .bg { padding: 20px 12px; align-items: flex-start; padding-top: 32px; }
+  .cardBody { padding: 26px 20px 22px; }
+  .title { font-size: 16px; }
+  .torchLeft, .torchRight { display: none; }
+  .classBadges { gap: 5px; }
+  .classBadge { font-size: 8px; padding: 2px 6px; }
+}
+
+@media (max-width: 360px) {
+  .cardBody { padding: 20px 14px 18px; }
+  .title { font-size: 14px; }
+}

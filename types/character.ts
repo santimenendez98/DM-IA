@@ -7,6 +7,11 @@ export interface CharacterStats {
   charisma: number;
 }
 
+export interface CharacterItem {
+  name: string;
+  description: string;
+}
+
 export interface Character {
   id: string;
   user_id: string;        // owner — not tied to any campaign
@@ -16,6 +21,7 @@ export interface Character {
   hp: number;
   max_hp: number;
   stats: CharacterStats;
+  items: CharacterItem[];
   backstory: string | null;
   image_url: string | null;
   created_at: string;

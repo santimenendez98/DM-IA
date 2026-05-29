@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
-import type { Character, CharacterStats } from "@/types/character";
+import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
 import { cx } from "@/components/cx";
@@ -14,6 +15,26 @@ import s from "./play.module.css";
 
 interface CampaignDetail extends Campaign {
   characters: Character[];
+}
+
+interface HpUpdateItem {
+  character_id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+}
+
+interface LevelUpItem {
+  character_id: string;
+  name: string;
+  level: number;
+}
+
+interface ItemGrantItem {
+  character_id: string;
+  character_name: string;
+  item: string;
+  description: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────
@@ -39,6 +60,8 @@ const STAT_DIE: Record<keyof CharacterStats, DieType> = {
 
 const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880"] as const;
 
+const VOTE_DURATION = 30; // seconds
+
 const SETTING_LABELS: Record<string, string> = {
   fantasy: "Fantasía",
   "sci-fi": "Ciencia Ficción",
@@ -51,6 +74,52 @@ const TONE_LABELS: Record<string, string> = {
   epic: "Épico", dark: "Oscuro", comedic: "Cómico",
   gritty: "Crudo", whimsical: "Caprichoso",
 };
+
+// ── Roll-request types & helpers ───────────────────────────────
+
+interface RollRequest {
+  dado: string;
+  mod: "FUE" | "DES" | "CON" | "INT" | "SAB" | "CAR" | null;
+  bono_prof: boolean;
+  tipo: string;
+  cd: number | null;
+  personaje: string | null;
+}
+
+const STAT_FROM_ABBR: Record<string, keyof CharacterStats> = {
+  FUE: "strength", DES: "dexterity", CON: "constitution",
+  INT: "intelligence", SAB: "wisdom", CAR: "charisma",
+};
+
+function parseRollRequests(content: string): { text: string; rolls: RollRequest[] } {
+  const rolls: RollRequest[] = [];
+  // Matches all variations the AI might emit:
+  //   TIRADA_JUGADOR:{...}
+  //   TIRADA_JUGADOR: {...}
+  //   [TIRADA_JUGADOR optional text: {...}]
+  //   [TIRADA_JUGADOR:{...}]
+  const cleaned = content
+    .replace(/\[?TIRADA_JUGADOR[^\{]*(\{[^}]+\})\]?/g, (_match, jsonPart: string) => {
+      try { rolls.push(JSON.parse(jsonPart) as RollRequest); } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text: cleaned, rolls };
+}
+
+function rollDice(notation: string): number {
+  const m = notation.match(/^(\d+)d(\d+)$/i);
+  if (!m) return 0;
+  let total = 0;
+  const sides = parseInt(m[2], 10);
+  for (let i = 0; i < parseInt(m[1], 10); i++) total += Math.floor(Math.random() * sides) + 1;
+  return total;
+}
+
+function calcProfBonus(level: number): number {
+  return Math.floor((level - 1) / 4) + 2;
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -85,8 +154,11 @@ function CharacterCard({
   return (
     <div className={cx(s.charCard, active && s.charCardActive)} onClick={onClick}>
       <div className={s.charTop}>
-        <div className={s.charAvatar} style={{ background: color }}>
-          {character.name[0].toUpperCase()}
+        <div className={s.charAvatar} style={character.image_url ? {} : { background: color }}>
+          {character.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={character.image_url} alt={character.name} className={s.charAvatarImg} />
+          ) : character.name[0].toUpperCase()}
         </div>
         <div className={s.charInfo}>
           <div className={s.charName}>{character.name}</div>
@@ -134,6 +206,32 @@ function CharacterCard({
           );
         })}
       </div>
+
+      {character.items?.length > 0 && (
+        <div className={s.charItems}>
+          <div className={s.charItemsHeader}>
+            <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+              <rect x="1" y="4.5" width="10" height="7" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.1" />
+              <path d="M1 6.5h10" stroke="#b8860b" strokeWidth="0.9" />
+              <path d="M4 4.5C4 3 4.8 1.5 6 1.5s2 1.5 2 3" fill="none" stroke="#b8860b" strokeWidth="1.1" strokeLinecap="round" />
+              <line x1="6" y1="4.5" x2="6" y2="11.5" stroke="#b8860b" strokeWidth="0.9" />
+            </svg>
+            <span>Inventario</span>
+            <span className={s.charItemsCount}>{character.items.length}</span>
+          </div>
+          <ul className={s.charItemsList}>
+            {character.items.slice(0, 5).map((item, i) => (
+              <li key={i} className={s.charItem} title={item.description || undefined}>
+                <span className={s.charItemDot} aria-hidden>·</span>
+                <span className={s.charItemName}>{item.name}</span>
+              </li>
+            ))}
+            {character.items.length > 5 && (
+              <li className={s.charItemMore}>+{character.items.length - 5} más</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -141,7 +239,8 @@ function CharacterCard({
 // ── DM message ─────────────────────────────────────────────────
 
 function DmMessage({ message }: { message: Message }) {
-  const paragraphs = message.content.split(/\n\n+/).filter(Boolean);
+  const { text } = parseRollRequests(message.content);
+  const paragraphs = text.split(/\n\n+/).filter(Boolean);
   return (
     <div className={s.msgDm}>
       <div className={s.msgDmHeader}>
@@ -158,7 +257,7 @@ function DmMessage({ message }: { message: Message }) {
       <div className={s.msgDmBody}>
         {paragraphs.length > 1
           ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
-          : <p>{message.content}</p>}
+          : <p>{text}</p>}
       </div>
     </div>
   );
@@ -169,15 +268,20 @@ function DmMessage({ message }: { message: Message }) {
 function CharMessage({
   message,
   color,
+  imageUrl,
 }: {
   message: Message;
   color: string;
+  imageUrl?: string | null;
 }) {
   const name = message.character_name ?? "Aventurero";
   return (
     <div className={s.msgChar}>
-      <div className={s.msgCharAvatar} style={{ background: color }}>
-        {name[0].toUpperCase()}
+      <div className={s.msgCharAvatar} style={imageUrl ? {} : { background: color }}>
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={name} className={s.msgCharAvatarImg} />
+        ) : name[0].toUpperCase()}
       </div>
       <div className={s.msgCharBody}>
         <div className={s.msgCharHeader}>
@@ -192,6 +296,244 @@ function CharMessage({
   );
 }
 
+// ── Rolls panel (one or many simultaneous player rolls) ────────
+
+function RollsPanel({
+  requests,
+  myCharNames,
+  charsByName,
+  sharedRolls,
+  isLeader,
+  onRoll,
+  onSend,
+  disabled,
+}: {
+  requests: RollRequest[];
+  myCharNames: Set<string>;
+  charsByName: Map<string, Character>;
+  sharedRolls: Record<string, number>;
+  isLeader: boolean;
+  onRoll: (charName: string, diceRoll: number) => void;
+  onSend: (msg: string) => void;
+  disabled: boolean;
+}) {
+  const [rolling, setRolling] = useState<boolean[]>(() => requests.map(() => false));
+
+  const allDone = requests.every((r) => sharedRolls[r.personaje ?? "_"] !== undefined);
+  const pendingCount = requests.filter((r) => sharedRolls[r.personaje ?? "_"] === undefined).length;
+
+  function handleRoll(i: number) {
+    const r = requests[i];
+    setRolling((prev) => { const n = [...prev]; n[i] = true; return n; });
+    setTimeout(() => {
+      onRoll(r.personaje ?? "_", rollDice(r.dado));
+      setRolling((prev) => { const n = [...prev]; n[i] = false; return n; });
+    }, 380);
+  }
+
+  function buildMessage() {
+    return requests.map((r) => {
+      const key = r.personaje ?? "_";
+      const dr = sharedRolls[key];
+      if (dr === undefined) return null;
+      const char = r.personaje ? charsByName.get(r.personaje) : null;
+      const statKey = r.mod ? STAT_FROM_ABBR[r.mod] : null;
+      const score = statKey && char ? char.stats[statKey] : 10;
+      const mod = Math.floor((score - 10) / 2);
+      const pb = r.bono_prof && char ? calcProfBonus(char.level) : 0;
+      const total = dr + mod + pb;
+      const success = r.cd !== null ? total >= r.cd : null;
+      const modPart = r.mod ? ` + ${r.mod}(${mod >= 0 ? "+" : ""}${mod})` : "";
+      const profPart = pb > 0 ? ` + Prof(+${pb})` : "";
+      const cdPart = r.cd != null ? ` vs CD ${r.cd}` : "";
+      const outcome = success !== null ? (success ? " → ✓ Éxito" : " → ✗ Fallo") : "";
+      const who = r.personaje ? `${r.personaje} — ` : "";
+      return `[TIRADA — ${who}${r.tipo}: ${r.dado}(${dr})${modPart}${profPart} = ${total}${cdPart}${outcome}]`;
+    }).filter(Boolean).join("\n");
+  }
+
+  return (
+    <div className={s.rollsPanel}>
+      <div className={s.rollsPanelHeader}>
+        <svg width="13" height="13" viewBox="0 0 20 20" aria-hidden>
+          <rect x="2" y="2" width="16" height="16" rx="3" fill="none" stroke="#b8860b" strokeWidth="1.5" />
+          <circle cx="7" cy="7" r="1.3" fill="#e8c040" />
+          <circle cx="13" cy="7" r="1.3" fill="#e8c040" />
+          <circle cx="7" cy="13" r="1.3" fill="#e8c040" />
+          <circle cx="13" cy="13" r="1.3" fill="#e8c040" />
+          <circle cx="10" cy="10" r="1.3" fill="#e8c040" />
+        </svg>
+        <span className={s.rollsPanelTitle}>
+          {requests.length === 1 ? "Tirada requerida" : `${requests.length} tiradas requeridas`}
+        </span>
+      </div>
+
+      <div className={s.rollsList}>
+        {requests.map((r, i) => {
+          const key = r.personaje ?? "_";
+          const isMine = !r.personaje || myCharNames.has(r.personaje);
+          const char = r.personaje ? charsByName.get(r.personaje) : null;
+          const statKey = r.mod ? STAT_FROM_ABBR[r.mod] : null;
+          const score = statKey && char ? char.stats[statKey] : 10;
+          const mod = Math.floor((score - 10) / 2);
+          const pb = r.bono_prof && char ? calcProfBonus(char.level) : 0;
+          const dr = sharedRolls[key];
+          const total = dr !== undefined ? dr + mod + pb : null;
+          const success = total !== null && r.cd !== null ? total >= r.cd : null;
+          const done = dr !== undefined;
+
+          return (
+            <div key={i} className={cx(s.rollItem, done && s.rollItemDone, !isMine && !done && s.rollItemOther)}>
+              <div className={s.rollItemInfo}>
+                {r.personaje && <span className={s.rollItemChar}>{r.personaje}</span>}
+                <span className={s.rollItemType}>{r.tipo}</span>
+                <span className={s.rollItemFormula}>
+                  {r.dado}{r.mod && ` + ${r.mod}`}{r.bono_prof && " + Prof"}{r.cd != null && ` · CD ${r.cd}`}
+                </span>
+              </div>
+
+              <div className={s.rollItemControls}>
+                {done && (
+                  <div className={s.rollItemResult}>
+                    <span className={s.rollItemDie}>{dr}</span>
+                    {r.mod && <span className={s.rollItemMod}>+{r.mod}({mod >= 0 ? "+" : ""}{mod})</span>}
+                    {pb > 0 && <span className={s.rollItemMod}>+Prof(+{pb})</span>}
+                    <span className={s.rollItemEq}>=</span>
+                    <span className={s.rollItemTotal}>{total}</span>
+                    {success !== null && (
+                      <span className={success ? s.rollItemSuccess : s.rollItemFail}>
+                        {success ? "✓" : "✗"}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isMine ? (
+                  <button
+                    className={cx(s.rollItemBtn, rolling[i] && s.rollItemBtnRolling)}
+                    onClick={() => handleRoll(i)}
+                    disabled={disabled || rolling[i]}
+                    type="button"
+                  >
+                    {rolling[i] ? "···" : !done ? `Tirar ${r.dado}` : "Retirar"}
+                  </button>
+                ) : !done ? (
+                  <span className={s.rollItemWaiting}>En espera...</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {isLeader ? (
+        <button
+          className={s.rollsPanelSend}
+          onClick={() => onSend(buildMessage())}
+          disabled={!allDone || disabled}
+          type="button"
+        >
+          {allDone ? "Enviar resultados al DM" : `Esperando ${pendingCount} tirada${pendingCount !== 1 ? "s" : ""}...`}
+        </button>
+      ) : (
+        <p className={s.rollsPanelNote}>
+          El líder enviará los resultados al DM cuando todos hayan tirado.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Rate limit notice (shown in chat when Gemini quota is hit) ─
+
+function DmRateLimitNote({
+  secsLeft,
+  limitType,
+}: {
+  secsLeft: number;
+  limitType: "minute" | "day";
+}) {
+  return (
+    <div className={s.rateLimitNote}>
+      <div className={s.rateLimitIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="#c07a20" strokeWidth="1.3" />
+          <line x1="8" y1="5" x2="8" y2="9" stroke="#c07a20" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="8" cy="11.2" r="0.9" fill="#c07a20" />
+        </svg>
+      </div>
+      <div className={s.rateLimitBody}>
+        <span className={s.rateLimitTitle}>Límite de consultas alcanzado</span>
+        {limitType === "day" ? (
+          <span className={s.rateLimitText}>
+            Se alcanzó el <strong>límite diario</strong> de consultas.
+            La partida podrá continuar mañana.
+          </span>
+        ) : (
+          <span className={s.rateLimitText}>
+            Demasiadas consultas seguidas. El Dungeon Master podrá responder en{" "}
+            <strong className={s.rateLimitTimer}>{secsLeft}s</strong>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Level up notice (shown in chat when a character levels up) ─
+
+function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
+  return (
+    <div className={s.levelUpNote}>
+      <div className={s.levelUpIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <polygon
+            points="8,1.5 9.8,6.2 15,6.2 10.7,9.3 12.4,14 8,11 3.6,14 5.3,9.3 1,6.2 6.2,6.2"
+            fill="none" stroke="#b8d060" strokeWidth="1.2" strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <div className={s.levelUpBody}>
+        {updates.map((u) => (
+          <div key={u.character_id} className={s.levelUpEntry}>
+            <span className={s.levelUpName}>{u.name}</span>
+            <span className={s.levelUpText}> ha alcanzado el </span>
+            <span className={s.levelUpLevel}>Nivel {u.level}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Item grant notice (shown in chat when DM gives an item) ───
+
+function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
+  return (
+    <div className={s.itemGrantNote}>
+      <div className={s.itemGrantIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <rect x="1" y="6" width="14" height="9" rx="1.5" fill="none" stroke="#c09020" strokeWidth="1.2" />
+          <path d="M1 9h14" stroke="#c09020" strokeWidth="1" />
+          <path d="M5.5 6C5.5 4 6.5 2 8 2s2.5 2 2.5 4" fill="none" stroke="#c09020" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="8" y1="6" x2="8" y2="15" stroke="#c09020" strokeWidth="1" />
+        </svg>
+      </div>
+      <div className={s.itemGrantBody}>
+        {grants.map((g, i) => (
+          <div key={i} className={s.itemGrantEntry}>
+            <span className={s.itemGrantChar}>{g.character_name}</span>
+            <span className={s.itemGrantVerb}> recibe </span>
+            <span className={s.itemGrantName}>{g.item}</span>
+            {g.description && (
+              <span className={s.itemGrantDesc}> — {g.description}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── DM thinking indicator ──────────────────────────────────────
 
 function DmThinking() {
@@ -201,6 +543,157 @@ function DmThinking() {
         <span /><span /><span />
       </div>
       <span className={s.dmThinkingText}>El Dungeon Master está narrando...</span>
+    </div>
+  );
+}
+
+// ── Player typing indicator ────────────────────────────────────
+
+function TypingIndicator({ name, color }: { name: string; color: string }) {
+  return (
+    <div className={s.typingIndicator}>
+      <div className={s.typingAvatar} style={{ background: color }}>
+        {name[0].toUpperCase()}
+      </div>
+      <div className={s.typingBubble}>
+        <span className={s.typingName} style={{ color }}>{name}</span>
+        <span className={s.typingLabel}>está escribiendo</span>
+        <div className={s.typingDots}>
+          <span /><span /><span />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Vote modal ─────────────────────────────────────────────────
+
+function VoteModal({
+  activeVote,
+  voteCountdown,
+  userId,
+  campaign,
+  charColorMap,
+  onCastVote,
+  onCancel,
+}: {
+  activeVote: ActiveVote;
+  voteCountdown: number;
+  userId: string;
+  campaign: CampaignDetail;
+  charColorMap: Record<string, string>;
+  onCastVote: (vote: boolean) => void;
+  onCancel: () => void;
+}) {
+  const yesCount   = Object.values(activeVote.votes).filter(Boolean).length;
+  const noCount    = Object.values(activeVote.votes).filter((v) => v === false).length;
+  const pending    = activeVote.voter_ids.length - Object.keys(activeVote.votes).length;
+  const myVote     = activeVote.votes[userId];
+  const isProposer = userId === activeVote.proposer_id;
+
+  return (
+    <div className={s.voteOverlay}>
+      <div className={s.voteCard}>
+
+        <div className={s.voteHeader}>
+          <div className={s.voteHeaderLeft}>
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+              <polygon
+                points="8,1.5 9.8,6.2 15,6.2 10.7,9.3 12.4,14 8,11 3.6,14 5.3,9.3 1,6.2 6.2,6.2"
+                fill="none" stroke="#b8860b" strokeWidth="1.2" strokeLinejoin="round"
+              />
+            </svg>
+            <span>Votación: ¿Actuar ahora?</span>
+          </div>
+          <div className={cx(s.voteTimer, voteCountdown <= 10 && s.voteTimerUrgent)}>
+            {voteCountdown}s
+          </div>
+        </div>
+
+        <div className={s.voteAction}>
+          <span className={s.voteActionChar}>{activeVote.character_name}</span>
+          <span className={s.voteActionText}>
+            {activeVote.content.length > 130
+              ? `${activeVote.content.slice(0, 130)}…`
+              : activeVote.content}
+          </span>
+        </div>
+
+        <div className={s.voteTally}>
+          <span className={s.voteTallyYes}>{yesCount} Sí</span>
+          <span className={s.voteTallyDivider}>·</span>
+          <span className={s.voteTallyNo}>{noCount} No</span>
+          <span className={s.voteTallyDivider}>·</span>
+          <span className={s.voteTallyPending}>{pending} pendiente{pending !== 1 && "s"}</span>
+        </div>
+
+        <div className={s.voterList}>
+          {activeVote.voter_ids.map((uid) => {
+            const vote      = activeVote.votes[uid];
+            const chars     = campaign.characters.filter((c) => c.user_id === uid);
+            const firstChar = chars[0];
+            const color     = firstChar
+              ? charColorMap[firstChar.id] ?? AVATAR_COLORS[0]
+              : "#6a5030";
+            const name = chars.length > 0
+              ? chars.map((c) => c.name).join(" & ")
+              : uid === campaign.user_id ? "Dungeon Master" : "Aventurero";
+            return (
+              <div key={uid} className={s.voterRow}>
+                <div className={s.voterAvatar} style={firstChar?.image_url ? {} : { background: color }}>
+                  {firstChar?.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={firstChar.image_url} alt={name} className={s.voterAvatarImg} />
+                  ) : name[0].toUpperCase()}
+                </div>
+                <span className={s.voterName}>{name}</span>
+                {uid === activeVote.proposer_id && (
+                  <span className={s.voterProposer}>propone</span>
+                )}
+                <span className={cx(
+                  s.voterVote,
+                  vote === true  && s.voterVoteYes,
+                  vote === false && s.voterVoteNo,
+                )}>
+                  {vote === true ? "Sí" : vote === false ? "No" : "···"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className={s.voteFooter}>
+          {isProposer ? (
+            <>
+              <span className={s.voteWaiting}>Esperando votos...</span>
+              <button className={s.voteCancelBtn} onClick={onCancel} type="button">
+                Cancelar
+              </button>
+            </>
+          ) : myVote !== undefined ? (
+            <span className={s.voteWaiting}>
+              Tu voto: <strong>{myVote ? "Sí" : "No"}</strong>
+            </span>
+          ) : (
+            <>
+              <button className={s.voteNoBtn} onClick={() => onCastVote(false)} type="button">
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                  <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                No
+              </button>
+              <button className={s.voteYesBtn} onClick={() => onCastVote(true)} type="button">
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+                  <polyline points="2,6 5,9 10,3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Sí
+              </button>
+            </>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -438,6 +931,17 @@ const DicePanel = React.forwardRef<
   );
 });
 
+// ── Vote types ─────────────────────────────────────────────────
+
+interface ActiveVote {
+  proposer_id: string;
+  character_id: string;
+  character_name: string;
+  content: string;
+  votes: Record<string, boolean>; // userId → yes/no
+  voter_ids: string[];            // unique user IDs in the session
+}
+
 // ── Main component ─────────────────────────────────────────────
 
 export default function Play() {
@@ -448,6 +952,7 @@ export default function Play() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [userId, setUserId] = useState<string>("");
   const [activeCharId, setActiveCharId] = useState<string>("");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -456,23 +961,66 @@ export default function Play() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [diceOpen, setDiceOpen] = useState(false);
   const [diceStatTrigger, setDiceStatTrigger] = useState<TriggerRoll | null>(null);
+  const [kicked, setKicked] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Map<string, { name: string; color: string }>>(new Map());
+  const [activeVote, setActiveVote] = useState<ActiveVote | null>(null);
+  const [voteCountdown, setVoteCountdown] = useState(0);
+  const [sharedRolls, setSharedRolls] = useState<Record<string, number>>({});
+  const [actCooldown, setActCooldown] = useState(0);
+  const [rateLimitSecsLeft, setRateLimitSecsLeft] = useState(0);
+  const [rateLimitType, setRateLimitType] = useState<"minute" | "day" | null>(null);
+  const [levelUpQueue, setLevelUpQueue] = useState<LevelUpItem[]>([]);
+  const [itemGrantQueue, setItemGrantQueue] = useState<ItemGrantItem[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isFirstScroll = useRef(true);
   const diceBtnRef = useRef<HTMLButtonElement>(null);
   const dicePanelRef = useRef<HTMLDivElement>(null);
+  // Refs so Realtime callbacks always access the latest campaign/userId
+  const campaignRef = useRef<CampaignDetail | null>(null);
+  const userIdRef   = useRef<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef        = useRef<any>(null);
+  const isTypingRef       = useRef(false);
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const voteTimeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voteIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeVoteRef      = useRef<ActiveVote | null>(null);
+  const activeRollMsgIdRef   = useRef<string | null>(null);
+  const cooldownIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevDmThinkingRef    = useRef(false);
+  const rateLimitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => { campaignRef.current = campaign; }, [campaign]);
+  useEffect(() => { userIdRef.current   = userId;   }, [userId]);
+  useEffect(() => { activeVoteRef.current = activeVote; }, [activeVote]);
 
   // ── Load data ──────────────────────────────────────────────
 
   useEffect(() => {
+    // Must arrive from the lobby — direct URL access is not allowed.
+    if (!sessionStorage.getItem(`play_auth_${id}`)) {
+      router.replace(`/campaigns/${id}/lobby`);
+      return;
+    }
+
+    // AbortController cancels in-flight requests when React Strict Mode
+    // unmounts + remounts the component, preventing the intro from firing twice.
+    const controller = new AbortController();
+    const { signal } = controller;
+
     getCurrUser().then(async (u) => {
+      if (signal.aborted) return;
       if (!u) { router.replace("/auth/login"); return; }
+      setUserId(u.id);
 
       const [campRes, msgsRes] = await Promise.all([
-        fetch(`/api/campaigns/${id}`),
-        fetch(`/api/campaigns/${id}/messages`),
+        fetch(`/api/campaigns/${id}`, { signal }),
+        fetch(`/api/campaigns/${id}/messages`, { signal }),
       ]);
+
+      if (signal.aborted) return;
 
       if (!campRes.ok) {
         setNotFound(true);
@@ -486,40 +1034,54 @@ export default function Play() {
         msgsRes.ok ? (msgsRes.json() as Promise<Message[]>) : Promise.resolve([]),
       ]);
 
+      if (signal.aborted) return;
+
       setCampaign(camp);
       setMessages(msgs);
       if (camp.characters.length > 0) {
-        // Prefer the user's own character; fall back to the first in the party.
         const myChar = camp.characters.find((c) => c.user_id === u.id);
         setActiveCharId((myChar ?? camp.characters[0]).id);
       }
       loader.stop();
       setLoading(false);
 
-      // First visit: let the DM open the scene.
-      if (msgs.length === 0) {
+      // Only the campaign owner (DM) triggers the opening narration.
+      // Players receive it via polling once it's saved to the database.
+      if (msgs.length === 0 && camp.user_id === u.id) {
         setDmThinking(true);
         try {
           const introRes = await fetch(`/api/campaigns/${camp.id}/messages`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dm_intro: true }),
+            signal,
           });
+          if (signal.aborted) return;
           if (introRes.ok) {
             const data = await introRes.json() as { dm_response?: Message };
-            if (data.dm_response) setMessages([data.dm_response]);
+            if (data.dm_response) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === data.dm_response!.id)) return prev;
+                return [...prev, data.dm_response!];
+              });
+            }
           } else if (introRes.status === 409) {
-            // Race: another tab already triggered it — fetch what was saved.
-            const msgsRes = await fetch(`/api/campaigns/${camp.id}/messages`);
-            if (msgsRes.ok) setMessages(await msgsRes.json() as Message[]);
+            // Another instance already triggered it — fetch the saved message.
+            const savedRes = await fetch(`/api/campaigns/${camp.id}/messages`, { signal });
+            if (!signal.aborted && savedRes.ok) setMessages(await savedRes.json() as Message[]);
           }
-        } catch {
-          // Non-fatal: the DM will respond on the first player action.
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return;
+          // Non-fatal.
         } finally {
-          setDmThinking(false);
+          if (!signal.aborted) setDmThinking(false);
         }
       }
+    }).catch((err) => {
+      if ((err as Error)?.name !== "AbortError") throw err;
     });
+
+    return () => controller.abort();
   }, [id, router]);
 
   // ── Auto-scroll ────────────────────────────────────────────
@@ -531,6 +1093,200 @@ export default function Play() {
     });
     isFirstScroll.current = false;
   }, [messages, dmThinking, loading]);
+
+  // ── Realtime channel ──────────────────────────────────────────
+  // • Postgres Changes on campaign_messages → live messages for all clients
+  // • Presence → detect when DM leaves the session
+
+  useEffect(() => {
+    if (!campaign || !userId) return;
+
+    const supabase = createClient();
+    const channel  = supabase.channel(`play:${campaign.id}`, {
+      config: { presence: { key: userId } },
+    });
+    channelRef.current = channel;
+
+    channel
+      // ── Broadcast: DM ended the session ──────────────────────
+      .on("broadcast", { event: "dm_left" }, () => {
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+        setKicked(true);
+      })
+      // ── Broadcast: instant delivery without DB polling ────────
+      .on("broadcast", { event: "new_message" }, ({ payload }: { payload: unknown }) => {
+        const msg = payload as Message;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      })
+      .on("broadcast", { event: "dm_thinking" }, () => {
+        setDmThinking(true);
+        setLevelUpQueue([]);
+        setItemGrantQueue([]);
+      })
+      .on("broadcast", { event: "dm_response" }, ({ payload }: { payload: unknown }) => {
+        const { hp_updates, level_updates, item_grants, ...msg } = payload as Message & {
+          hp_updates?: HpUpdateItem[];
+          level_updates?: LevelUpItem[];
+          item_grants?: ItemGrantItem[];
+        };
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === (msg as Message).id)) return prev;
+          return [...prev, msg as Message];
+        });
+        setDmThinking(false);
+        if (hp_updates?.length) applyHpUpdates(hp_updates);
+        if (level_updates?.length) applyLevelUpdates(level_updates);
+        if (item_grants?.length) applyItemGrants(item_grants);
+      })
+      // ── Broadcast: player typing indicators ──────────────────
+      .on("broadcast", { event: "typing_start" }, ({ payload }: { payload: unknown }) => {
+        const { character_id, character_name } = payload as { character_id: string; character_name: string };
+        // Skip own characters
+        const mine = (campaignRef.current?.characters ?? [])
+          .filter((c) => c.user_id === userIdRef.current)
+          .map((c) => c.id);
+        if (mine.includes(character_id)) return;
+
+        const chars = campaignRef.current?.characters ?? [];
+        const idx   = chars.findIndex((c) => c.id === character_id);
+        const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+
+        // Refresh the auto-clear timer
+        const existing = typingTimeoutsRef.current.get(character_id);
+        if (existing) clearTimeout(existing);
+        const timer = setTimeout(() => {
+          setTypingUsers((prev) => { const m = new Map(prev); m.delete(character_id); return m; });
+          typingTimeoutsRef.current.delete(character_id);
+        }, 5000);
+        typingTimeoutsRef.current.set(character_id, timer);
+
+        setTypingUsers((prev) => new Map(prev).set(character_id, { name: character_name, color }));
+      })
+      .on("broadcast", { event: "typing_stop" }, ({ payload }: { payload: unknown }) => {
+        const { character_id } = payload as { character_id: string };
+        const timer = typingTimeoutsRef.current.get(character_id);
+        if (timer) { clearTimeout(timer); typingTimeoutsRef.current.delete(character_id); }
+        setTypingUsers((prev) => { const m = new Map(prev); m.delete(character_id); return m; });
+      })
+      // ── Broadcast: democratic vote ────────────────────────────
+      .on("broadcast", { event: "vote_start" }, ({ payload }: { payload: unknown }) => {
+        const { proposer_id, character_id, character_name, content, voter_ids } = payload as {
+          proposer_id: string; character_id: string; character_name: string;
+          content: string; voter_ids: string[];
+        };
+        if (proposer_id === userIdRef.current) return; // proposer handles locally
+        setActiveVote({ proposer_id, character_id, character_name, content,
+          votes: { [proposer_id]: true }, voter_ids });
+        setVoteCountdown(VOTE_DURATION);
+        if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+        voteIntervalRef.current = setInterval(() => {
+          setVoteCountdown((c) => Math.max(0, c - 1));
+        }, 1000);
+        voteTimeoutRef.current = setTimeout(() => {
+          if (!activeVoteRef.current) return;
+          setActiveVote(null);
+          setVoteCountdown(0);
+          if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        }, VOTE_DURATION * 1000);
+      })
+      .on("broadcast", { event: "vote_cast" }, ({ payload }: { payload: unknown }) => {
+        const { voter_id, vote } = payload as { voter_id: string; vote: boolean };
+        setActiveVote((prev) =>
+          prev ? { ...prev, votes: { ...prev.votes, [voter_id]: vote } } : prev,
+        );
+      })
+      .on("broadcast", { event: "vote_cancel" }, () => {
+        if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+        if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+        setActiveVote(null);
+        setVoteCountdown(0);
+      })
+      // ── Broadcast: rate limit notice (shown to all players) ──
+      .on("broadcast", { event: "rate_limit" }, ({ payload }: { payload: unknown }) => {
+        const { limit_type, retry_in } = payload as { limit_type: "minute" | "day"; retry_in: number };
+        startRateLimitCountdown(limit_type ?? "minute", retry_in ?? 0);
+      })
+      // ── Broadcast: shared player roll result ──────────────────
+      .on("broadcast", { event: "player_roll" }, ({ payload }: { payload: unknown }) => {
+        const { charName, diceRoll, msgId } = payload as {
+          charName: string; diceRoll: number; msgId: string | null;
+        };
+        if (msgId === activeRollMsgIdRef.current) {
+          setSharedRolls((prev) => ({ ...prev, [charName]: diceRoll }));
+        }
+      })
+      // ── Postgres Changes: fallback if migration is applied ────
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "campaign_messages",
+          filter: `campaign_id=eq.${campaign.id}` },
+        (payload: { new: unknown }) => {
+          const raw = payload.new as Message;
+          const chars = campaignRef.current?.characters ?? [];
+          const char  = chars.find((c) => c.id === raw.character_id);
+          const msg: Message = { ...raw, character_name: char?.name ?? null };
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
+          if (msg.role === "dm") setDmThinking(false);
+        },
+      )
+      // DM presence left → redirect players to dashboard (fallback for unexpected disconnects)
+      .on("presence", { event: "leave" }, ({ leftPresences }: { leftPresences: unknown[] }) => {
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+        if (!camp || uid === camp.user_id) return;
+        const dmLeft = leftPresences.some(
+          (p: unknown) => (p as { role?: string }).role === "dm",
+        );
+        if (dmLeft) setKicked(true);
+      })
+      .subscribe(async (status: string) => {
+        if (status !== "SUBSCRIBED") return;
+        const isDM = campaignRef.current?.user_id === userIdRef.current;
+        await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
+      });
+
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      typingTimeoutsRef.current.forEach(clearTimeout);
+      typingTimeoutsRef.current.clear();
+      if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+      if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+      if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
+    };
+  }, [campaign?.id, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Player intro fallback poll ─────────────────────────────
+  // If Realtime isn't configured yet (tables not in publication),
+  // players poll every 6 s until the DM's opening narration arrives.
+  // Using a boolean dep (hasMessages) instead of messages.length prevents
+  // the timer from restarting on every new message that arrives.
+
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    if (loading || !campaign || !userId) return;
+    const isDM = campaign.user_id === userId;
+    if (isDM || hasMessages) return;
+
+    const timer = setInterval(async () => {
+      const res = await fetch(`/api/campaigns/${campaign.id}/messages`);
+      if (!res.ok) return;
+      const fetched = await res.json() as Message[];
+      if (fetched.length > 0) setMessages(fetched);
+    }, 6000);
+
+    return () => clearInterval(timer);
+  }, [loading, campaign?.id, userId, hasMessages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-resize textarea ───────────────────────────────────
 
@@ -558,16 +1314,100 @@ export default function Play() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [diceOpen]);
 
+  // ── Leave session ─────────────────────────────────────
+  // DM leaving resets started_at (so lobby shows waiting state) and broadcasts
+  // dm_left so all connected players are immediately redirected to dashboard.
+
+  const handleLeave = useCallback(async () => {
+    if (campaign?.user_id === userId) {
+      fetch(`/api/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ started_at: null }),
+      }).catch(() => {});
+      if (channelRef.current) {
+        try {
+          await channelRef.current.send({
+            type: "broadcast",
+            event: "dm_left",
+            payload: {},
+          });
+        } catch { /* non-fatal */ }
+      }
+    }
+    loader.start();
+    router.push("/dashboard");
+  }, [campaign, userId, router]);
+
+  // ── Typing broadcast ──────────────────────────────────────
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInput(value);
+
+    const activeChar = campaign?.characters.find(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!activeChar || !channelRef.current) return;
+
+    if (value.trim()) {
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        channelRef.current.send({
+          type: "broadcast",
+          event: "typing_start",
+          payload: { character_id: activeCharId, character_name: activeChar.name },
+        });
+      }
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      typingDebounceRef.current = setTimeout(() => {
+        if (isTypingRef.current) {
+          isTypingRef.current = false;
+          channelRef.current?.send({
+            type: "broadcast",
+            event: "typing_stop",
+            payload: { character_id: activeCharId },
+          });
+        }
+      }, 3000);
+    } else if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      channelRef.current.send({
+        type: "broadcast",
+        event: "typing_stop",
+        payload: { character_id: activeCharId },
+      });
+    }
+  }, [campaign, activeCharId, userId]);
+
   // ── Send message ───────────────────────────────────────────
 
-  const handleSend = useCallback(async (withDm: boolean) => {
-    if (!input.trim() || sending || dmThinking || !campaign || !activeCharId) return;
+  const handleSend = useCallback(async (withDm: boolean, overrideContent?: string) => {
+    const content = overrideContent ?? input.trim();
+    if (!content || sending || dmThinking || !campaign || !activeCharId) return;
 
-    const content = input.trim();
+    // Ensure the active character belongs to the current user
+    const charIsOwned = campaign.characters.some(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!charIsOwned) return;
+
+    // Clear typing indicator before sending
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "typing_stop",
+        payload: { character_id: activeCharId },
+      });
+    }
+
     setInput("");
     setSendError(null);
     setSending(true);
-    if (withDm) setDmThinking(true);
+    if (withDm) { setDmThinking(true); setLevelUpQueue([]); setItemGrantQueue([]); }
 
     try {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`, {
@@ -586,31 +1426,159 @@ export default function Play() {
         message: Message;
         dm_response?: Message;
         dm_error?: string;
+        limit_type?: "minute" | "day";
+        retry_in?: number;
+        hp_updates?: HpUpdateItem[];
+        level_updates?: LevelUpItem[];
+        item_grants?: ItemGrantItem[];
       };
 
       setMessages((prev) => {
-        const next = [...prev, data.message];
-        if (data.dm_response) next.push(data.dm_response);
+        const ids = new Set(prev.map((m) => m.id));
+        const next = [...prev];
+        if (!ids.has(data.message.id)) next.push(data.message);
+        if (data.dm_response && !ids.has(data.dm_response.id)) next.push(data.dm_response);
         return next;
       });
 
-      if (data.dm_error) setSendError(data.dm_error);
+      if (data.hp_updates?.length) applyHpUpdates(data.hp_updates);
+      if (data.level_updates?.length) applyLevelUpdates(data.level_updates);
+      if (data.item_grants?.length) applyItemGrants(data.item_grants);
+
+      if (data.dm_error === "rate_limit") {
+        const limitType = data.limit_type ?? "minute";
+        const retryIn   = data.retry_in ?? 0;
+        startRateLimitCountdown(limitType, retryIn);
+        channelRef.current?.send({
+          type: "broadcast",
+          event: "rate_limit",
+          payload: { limit_type: limitType, retry_in: retryIn },
+        }).catch(() => {});
+      } else if (data.dm_error) {
+        setSendError(data.dm_error);
+      }
     } catch {
       setSendError("Error de conexión. Inténtalo de nuevo.");
     } finally {
       setSending(false);
       setDmThinking(false);
     }
-  }, [input, sending, dmThinking, campaign, activeCharId]);
+  }, [input, sending, dmThinking, campaign, activeCharId, userId]);
+
+  // ── Act request ────────────────────────────────────────────
+  // Single-player (all characters owned by current user) → act immediately.
+  // Multi-player (at least one character owned by someone else) → confirm first.
+
+  const handleActRequest = useCallback(() => {
+    if (!input.trim() || sending || dmThinking || actCooldown > 0 || !campaign || !activeCharId) return;
+    const charIsOwned = campaign.characters.some(
+      (c) => c.id === activeCharId && c.user_id === userId,
+    );
+    if (!charIsOwned) return;
+    const isMultiplayer = campaign.characters.some((c) => c.user_id !== userId);
+    if (!isMultiplayer) {
+      handleSend(true);
+      return;
+    }
+
+    // Multiplayer: start a democratic vote
+    const presenceState = channelRef.current?.presenceState() ?? {};
+    const presenceIds = Object.keys(presenceState);
+    const voter_ids = presenceIds.length > 0 ? presenceIds : [userId];
+
+    if (voter_ids.length <= 1) {
+      handleSend(true);
+      return;
+    }
+
+    const content = input.trim();
+    setInput("");
+
+    const proposerChar = campaign.characters.find((c) => c.id === activeCharId);
+    const character_name = proposerChar?.name ?? "Aventurero";
+
+    const voteData: ActiveVote = {
+      proposer_id: userId,
+      character_id: activeCharId,
+      character_name,
+      content,
+      votes: { [userId]: true },
+      voter_ids,
+    };
+    setActiveVote(voteData);
+    setVoteCountdown(VOTE_DURATION);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    voteIntervalRef.current = setInterval(() => {
+      setVoteCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+    voteTimeoutRef.current = setTimeout(() => {
+      if (!activeVoteRef.current) return;
+      channelRef.current?.send({ type: "broadcast", event: "vote_cancel", payload: {} });
+      setActiveVote(null);
+      setVoteCountdown(0);
+      if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    }, VOTE_DURATION * 1000);
+
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "vote_start",
+      payload: { proposer_id: userId, character_id: activeCharId, character_name, content, voter_ids },
+    });
+  }, [input, sending, dmThinking, actCooldown, campaign, activeCharId, userId, handleSend]);
+
+  const castVote = useCallback((vote: boolean) => {
+    const uid = userIdRef.current;
+    if (!activeVoteRef.current || !uid) return;
+    if (activeVoteRef.current.votes[uid] !== undefined) return;
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "vote_cast",
+      payload: { voter_id: uid, vote },
+    });
+    setActiveVote((prev) => {
+      if (!prev) return prev;
+      return { ...prev, votes: { ...prev.votes, [uid]: vote } };
+    });
+  }, []);
+
+  const cancelVote = useCallback(() => {
+    if (!activeVoteRef.current) return;
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    channelRef.current?.send({ type: "broadcast", event: "vote_cancel", payload: {} });
+    setActiveVote(null);
+    setVoteCountdown(0);
+  }, []);
+
+  // ── Vote resolution ────────────────────────────────────────
+  // Runs whenever votes update; resolves when every voter has cast a vote.
+  useEffect(() => {
+    if (!activeVote) return;
+    const { voter_ids, votes, proposer_id, content } = activeVote;
+    if (Object.keys(votes).length < voter_ids.length) return;
+
+    const yesCount = Object.values(votes).filter(Boolean).length;
+    const approved = yesCount * 2 > voter_ids.length;
+
+    if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
+    if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
+    setActiveVote(null);
+    setVoteCountdown(0);
+
+    if (approved && userIdRef.current === proposer_id) {
+      handleSend(true, content);
+    }
+  }, [activeVote, handleSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        handleSend(true);
+        handleActRequest();
       }
     },
-    [handleSend],
+    [handleActRequest],
   );
 
   const handleDiceInsert = useCallback((text: string) => {
@@ -632,6 +1600,183 @@ export default function Play() {
     },
     [],
   );
+
+  // ── Apply HP updates to local campaign state ──────────────────
+
+  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, hp: upd.hp } : c;
+        }),
+      };
+    });
+  }, []);
+
+  // ── Apply level-up updates to local campaign state ────────────
+
+  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, level: upd.level } : c;
+        }),
+      };
+    });
+    setLevelUpQueue(updates);
+  }, []);
+
+  // ── Apply item grants to local campaign state ─────────────────
+
+  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
+    if (!grants.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const newItems = grants
+            .filter((g) => g.character_id === c.id)
+            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
+          return newItems.length > 0
+            ? { ...c, items: [...(c.items ?? []), ...newItems] }
+            : c;
+        }),
+      };
+    });
+    setItemGrantQueue(grants);
+  }, []);
+
+  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
+
+  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
+    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
+    setRateLimitType(limitType);
+
+    if (limitType === "day" || secs === 0) {
+      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
+      setRateLimitSecsLeft(0);
+      setActCooldown(30);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else {
+      setRateLimitSecsLeft(secs);
+      setActCooldown(secs);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setRateLimitSecsLeft((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+        setActCooldown((c) => Math.max(0, c - 1));
+      }, 1000);
+    }
+  }, []);
+
+  // ── Player roll handler (broadcasts to other players) ─────
+
+  const handlePlayerRoll = useCallback((charName: string, diceRoll: number) => {
+    setSharedRolls((prev) => ({ ...prev, [charName]: diceRoll }));
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "player_roll",
+      payload: { charName, diceRoll, msgId: activeRollMsgIdRef.current },
+    }).catch(() => {});
+  }, []);
+
+  // ── Cooldown after DM responds (prevents rate-limit spam) ─
+
+  const COOLDOWN_SECS = 5;
+  useEffect(() => {
+    const wasThinkinng = prevDmThinkingRef.current;
+    prevDmThinkingRef.current = dmThinking;
+    if (wasThinkinng && !dmThinking) {
+      // DM just finished — start cooldown
+      if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+      setActCooldown(COOLDOWN_SECS);
+      cooldownIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) { clearInterval(cooldownIntervalRef.current!); return 0; }
+          return c - 1;
+        });
+      }, 1000);
+    }
+    return () => {};
+  }, [dmThinking]);
+
+  // ── Reset shared rolls when a new DM roll-request arrives ─
+
+  useEffect(() => {
+    const lastMsgLocal = messages[messages.length - 1];
+    if (!dmThinking && lastMsgLocal?.role === "dm") {
+      const rolls = parseRollRequests(lastMsgLocal.content).rolls;
+      if (rolls.length > 0 && lastMsgLocal.id !== activeRollMsgIdRef.current) {
+        activeRollMsgIdRef.current = lastMsgLocal.id;
+        setSharedRolls({});
+      }
+    }
+  }, [messages, dmThinking]);
+
+  // ── Derived (must be before early returns — Rules of Hooks) ───
+
+  const isLeader = campaign?.user_id === userId;
+
+  const myChars = useMemo(
+    () => (campaign?.characters ?? []).filter((c) => c.user_id === userId),
+    [campaign?.characters, userId],
+  );
+
+  const activeChar = useMemo(
+    () => (campaign?.characters ?? []).find((c) => c.id === activeCharId),
+    [campaign?.characters, activeCharId],
+  );
+
+  const charColorMap = useMemo(
+    () => Object.fromEntries(
+      (campaign?.characters ?? []).map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
+    ),
+    [campaign?.characters],
+  );
+
+  const charImgMap = useMemo(
+    () => Object.fromEntries((campaign?.characters ?? []).map((c) => [c.id, c.image_url])),
+    [campaign?.characters],
+  );
+
+  const myCharNames = useMemo(
+    () => new Set(myChars.map((c) => c.name)),
+    [myChars],
+  );
+
+  const charsByName = useMemo(
+    () => new Map((campaign?.characters ?? []).map((c) => [c.name, c])),
+    [campaign?.characters],
+  );
+
+  const lastMsg = messages[messages.length - 1];
+  const pendingRolls = useMemo(() => {
+    if (dmThinking || !lastMsg || lastMsg.role !== "dm") return [];
+    return parseRollRequests(lastMsg.content).rolls;
+  }, [lastMsg, dmThinking]);
 
   // ── Loading ────────────────────────────────────────────────
 
@@ -661,31 +1806,60 @@ export default function Play() {
     );
   }
 
-  // ── Derived ────────────────────────────────────────────────
-
-  const activeChar = campaign.characters.find((c) => c.id === activeCharId);
-  const charColorMap = Object.fromEntries(
-    campaign.characters.map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
-  );
-
   // ── JSX ────────────────────────────────────────────────────
 
   return (
     <div className={s.page}>
       <div className={s.stars} aria-hidden />
 
+      {/* ── Vote modal ──────────────────────────────────────── */}
+      {activeVote && (
+        <VoteModal
+          activeVote={activeVote}
+          voteCountdown={voteCountdown}
+          userId={userId}
+          campaign={campaign}
+          charColorMap={charColorMap}
+          onCastVote={castVote}
+          onCancel={cancelVote}
+        />
+      )}
+
+      {/* ── DM left overlay ─────────────────────────────────── */}
+      {kicked && (
+        <div className={s.kickOverlay}>
+          <div className={s.kickCard}>
+            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+              <circle cx="20" cy="20" r="17" fill="none" stroke="#b84a4a" strokeWidth="1.5" />
+              <line x1="20" y1="11" x2="20" y2="23" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="20" cy="29" r="2" fill="#b84a4a" />
+            </svg>
+            <h2 className={s.kickTitle}>La sesión ha terminado</h2>
+            <p className={s.kickSub}>
+              El Dungeon Master ha abandonado la partida. Pulsa el botón para volver al Salón.
+            </p>
+            <button
+              className={s.kickBtn}
+              onClick={() => { loader.start(); router.replace("/dashboard"); }}
+            >
+              Volver al Salón ahora
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ──────────────────────────────────────────── */}
       <header className={s.header}>
         <button
           className={s.backBtn}
-          onClick={() => { loader.start(); router.push(`/campaigns/${campaign.id}`); }}
+          onClick={handleLeave}
           type="button"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
             <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Campaña
+          Salón
         </button>
 
         <div className={s.headerDivider} aria-hidden />
@@ -773,10 +1947,11 @@ export default function Play() {
                   color={AVATAR_COLORS[i % AVATAR_COLORS.length]}
                   active={char.id === activeCharId}
                   onClick={() => {
-                    setActiveCharId(char.id);
+                    // Only allow switching to characters owned by the current user
+                    if (char.user_id === userId) setActiveCharId(char.id);
                     setSidebarOpen(false);
                   }}
-                  onStatRoll={handleStatRoll}
+                  onStatRoll={char.user_id === userId ? handleStatRoll : undefined}
                 />
               ))
             )}
@@ -816,12 +1991,25 @@ export default function Play() {
                     key={msg.id}
                     message={msg}
                     color={charColorMap[msg.character_id ?? ""] ?? AVATAR_COLORS[0]}
+                    imageUrl={charImgMap[msg.character_id ?? ""] ?? null}
                   />
                 ),
               )
             )}
 
+            {[...typingUsers.entries()].map(([charId, { name, color }]) => (
+              <TypingIndicator key={charId} name={name} color={color} />
+            ))}
             {dmThinking && <DmThinking />}
+            {!dmThinking && rateLimitType !== null && (
+              <DmRateLimitNote secsLeft={rateLimitSecsLeft} limitType={rateLimitType} />
+            )}
+            {!dmThinking && levelUpQueue.length > 0 && (
+              <LevelUpNote updates={levelUpQueue} />
+            )}
+            {!dmThinking && itemGrantQueue.length > 0 && (
+              <ItemGrantNote grants={itemGrantQueue} />
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -838,14 +2026,29 @@ export default function Play() {
             </div>
           )}
 
+          {/* Rolls panel */}
+          {pendingRolls.length > 0 && (
+            <RollsPanel
+              key={lastMsg?.id}
+              requests={pendingRolls}
+              myCharNames={myCharNames}
+              charsByName={charsByName}
+              sharedRolls={sharedRolls}
+              isLeader={isLeader}
+              onRoll={handlePlayerRoll}
+              onSend={(msg) => handleSend(true, msg)}
+              disabled={sending || dmThinking}
+            />
+          )}
+
           {/* Input area */}
           <div className={s.inputArea}>
 
-            {/* Character tabs — only shown when party > 1 */}
-            {campaign.characters.length > 1 && (
+            {/* Character tabs — only own characters, only shown when user has more than one */}
+            {myChars.length > 1 && (
               <div className={s.charTabs}>
-                {campaign.characters.map((c, i) => {
-                  const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                {myChars.map((c) => {
+                  const color = charColorMap[c.id] ?? AVATAR_COLORS[0];
                   const isActive = c.id === activeCharId;
                   return (
                     <button
@@ -868,7 +2071,7 @@ export default function Play() {
                 ref={textareaRef}
                 className={s.textarea}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   activeChar
@@ -894,8 +2097,8 @@ export default function Play() {
                 </button>
                 <button
                   className={s.btnAct}
-                  onClick={() => handleSend(true)}
-                  disabled={!input.trim() || sending || dmThinking}
+                  onClick={handleActRequest}
+                  disabled={!input.trim() || sending || dmThinking || actCooldown > 0}
                   type="button"
                   title="Actuar e invocar al DM (Ctrl+Enter)"
                 >
@@ -907,7 +2110,7 @@ export default function Play() {
                       <polyline points="6,3 11,3 11,8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
-                  {sending ? "Enviando..." : "Actuar"}
+                  {sending ? "Enviando..." : actCooldown > 0 ? `${actCooldown}s` : "Actuar"}
                 </button>
               </div>
             </div>

@@ -480,17 +480,20 @@
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 680px) {
-  .cardBody { padding: 28px 24px; }
+  .cardBody { padding: 28px 20px; }
   .title { font-size: 19px; }
+  .content { padding: 20px 16px 60px; }
 
-  .settingGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .settingGrid .settingCard:last-child {
-    grid-column: 1 / -1;
-  }
+  .settingGrid { grid-template-columns: repeat(2, 1fr); }
+  .settingGrid .settingCard:last-child { grid-column: 1 / -1; }
 
   .actions { flex-direction: column-reverse; }
-  .btnPrimary, .btnSecondary { text-align: center; }
+  .btnPrimary, .btnSecondary { width: 100%; text-align: center; }
+}
+
+@media (max-width: 420px) {
+  .cardBody { padding: 22px 14px; }
+  .title { font-size: 16px; }
+  .content { padding: 16px 12px 50px; }
+  .settingGrid { grid-template-columns: repeat(2, 1fr); }
 }

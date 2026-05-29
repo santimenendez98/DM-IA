@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ── Page ─────────────────────────────────────────────────────── */
 
 .page {
@@ -247,6 +252,15 @@
   color: rgba(255, 255, 255, 0.9);
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.15);
+  overflow: hidden;
+}
+
+.charAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .charInfo { flex: 1; min-width: 0; }
@@ -494,6 +508,15 @@
   flex-shrink: 0;
   margin-top: 2px;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+
+.msgCharAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .msgCharBody {
@@ -568,6 +591,73 @@
   font-style: italic;
 }
 
+/* ── Player typing indicator ──────────────────────────────────── */
+
+.typingIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.typingAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.typingBubble {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 4px 11px;
+}
+
+.typingName {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.typingLabel {
+  font-size: 0.8rem;
+  color: #5a4828;
+  font-style: italic;
+}
+
+.typingDots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.typingDots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #6a5030;
+  animation: typingBounce 1.1s infinite;
+}
+.typingDots span:nth-child(2) { animation-delay: 0.18s; }
+.typingDots span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
 /* ── Empty state ──────────────────────────────────────────────── */
 
 .emptyMessages {
@@ -597,6 +687,317 @@
 }
 .emptySubtitle strong { color: #6a5030; font-weight: 600; }
 
+/* ── Vote modal ─────────────────────────────────────────────────── */
+
+.voteOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 2, 8, 0.75);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.15s ease;
+}
+
+.voteCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 28px;
+  background: linear-gradient(160deg, #1a1208 0%, #120e0a 100%);
+  border: 1px solid rgba(184, 134, 11, 0.3);
+  border-radius: 6px;
+  box-shadow: 0 0 32px rgba(184, 134, 11, 0.08), 0 8px 28px rgba(0,0,0,0.55);
+  max-width: 420px;
+  width: 90%;
+}
+
+.voteHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.voteHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #c8a830;
+  letter-spacing: 0.04em;
+}
+
+.voteTimer {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6a5030;
+  letter-spacing: 0.04em;
+  min-width: 28px;
+  text-align: right;
+}
+
+.voteTimerUrgent {
+  color: #c04040;
+  animation: timerPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+.voteAction {
+  background: rgba(255,255,255,0.03);
+  border-left: 2px solid rgba(184,134,11,0.3);
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+}
+
+.voteActionChar {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.voteActionText {
+  font-size: 0.88rem;
+  color: #7a6848;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.voteTally {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.voteTallyYes     { color: #4a8a5a; }
+.voteTallyNo      { color: #8a3a3a; }
+.voteTallyPending { color: #4a3820; }
+.voteTallyDivider { color: #2e2010; }
+
+.voterList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.voterRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 3px;
+}
+
+.voterAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.voterAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+
+.voterName {
+  flex: 1;
+  font-size: 0.82rem;
+  color: #9a8868;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voterProposer {
+  font-size: 0.58rem;
+  color: #b8860b;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.04em;
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid rgba(184, 134, 11, 0.22);
+  border-radius: 2px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.voterVote {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #4a3820;
+  min-width: 26px;
+  text-align: center;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.voterVoteYes { color: #4a8a5a; }
+.voterVoteNo  { color: #8a3a3a; }
+
+.voteFooter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.voteWaiting {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #5a4828;
+  font-style: italic;
+}
+.voteWaiting strong { color: #9a8858; font-style: normal; }
+
+.voteCancelBtn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: #6a5838;
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.voteCancelBtn:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+
+.voteNoBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(140,40,40,0.12);
+  border: 1px solid rgba(140,40,40,0.4);
+  border-radius: 3px;
+  color: #d07070;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.voteNoBtn:hover { background: rgba(140,40,40,0.22); border-color: rgba(140,40,40,0.65); }
+
+.voteYesBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(40,90,60,0.15);
+  border: 1px solid rgba(50,140,80,0.4);
+  border-radius: 3px;
+  color: #70c090;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.voteYesBtn:hover { background: rgba(40,90,60,0.28); border-color: rgba(50,140,80,0.65); }
+
+/* ── Kicked overlay (DM left) ─────────────────────────────────── */
+
+.kickOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 2, 8, 0.88);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.25s ease;
+}
+
+.kickCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 36px 40px;
+  background: linear-gradient(160deg, #1a0e08 0%, #120a14 100%);
+  border: 1px solid rgba(184, 74, 74, 0.35);
+  border-radius: 6px;
+  box-shadow: 0 0 40px rgba(184, 74, 74, 0.12), 0 8px 32px rgba(0,0,0,0.6);
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.kickTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #e0a0a0;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.kickSub {
+  color: #9a7060;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.kickBtn {
+  margin-top: 4px;
+  padding: 8px 22px;
+  background: rgba(184, 74, 74, 0.15);
+  border: 1px solid rgba(184, 74, 74, 0.45);
+  border-radius: 3px;
+  color: #e0a0a0;
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.kickBtn:hover { background: rgba(184, 74, 74, 0.28); border-color: rgba(184, 74, 74, 0.7); }
+
 /* ── Send error banner ────────────────────────────────────────── */
 
 .sendError {
@@ -624,6 +1025,461 @@
   transition: opacity 0.15s;
 }
 .sendErrorClose:hover { opacity: 1; }
+
+/* ── Rolls panel ──────────────────────────────────────────────── */
+
+.rollsPanel {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(184, 134, 11, 0.35);
+  border-bottom: 1px solid rgba(184, 134, 11, 0.12);
+  background: linear-gradient(160deg, rgba(24, 14, 2, 0.99) 0%, rgba(14, 8, 1, 0.99) 100%);
+  padding: 12px 16px 14px;
+}
+
+.rollsPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.rollsPanelTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* List of roll rows */
+
+.rollsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rollItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(184, 134, 11, 0.2);
+  border-radius: 3px;
+  flex-wrap: wrap;
+}
+
+.rollItemDone {
+  border-color: rgba(184, 134, 11, 0.4);
+  background: rgba(184, 134, 11, 0.06);
+}
+
+.rollItemOther {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.rollItemInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rollItemChar {
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #b8860b;
+  background: rgba(184, 134, 11, 0.12);
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  border-radius: 9px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.rollItemType {
+  font-family: 'Crimson Text', serif;
+  font-size: 0.96rem;
+  color: #d4c090;
+}
+
+.rollItemFormula {
+  font-size: 0.72rem;
+  color: #4a3818;
+  font-style: italic;
+}
+
+/* Controls (my rolls) */
+
+.rollItemControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rollItemResult {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rollItemDie {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #c9a030;
+}
+
+.rollItemMod {
+  font-size: 0.72rem;
+  color: #5a4020;
+}
+
+.rollItemEq {
+  font-size: 0.75rem;
+  color: #3a2810;
+}
+
+.rollItemTotal {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e8c040;
+  text-shadow: 0 0 10px rgba(232, 192, 64, 0.3);
+}
+
+.rollItemSuccess {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #5cad78;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rollItemFail {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #c06060;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rollItemBtn {
+  padding: 5px 13px;
+  border: 1px solid rgba(184, 134, 11, 0.4);
+  background: rgba(184, 134, 11, 0.07);
+  color: #b8960a;
+  font-family: 'Cinzel', serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.rollItemBtn:hover:not(:disabled) {
+  background: rgba(184, 134, 11, 0.14);
+  border-color: rgba(184, 134, 11, 0.65);
+  color: #e8c040;
+}
+.rollItemBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@keyframes rollShake {
+  0%   { transform: rotate(0deg) scale(1); }
+  25%  { transform: rotate(-14deg) scale(1.1); }
+  50%  { transform: rotate(14deg) scale(1.1); }
+  75%  { transform: rotate(-7deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.rollItemBtnRolling { animation: rollShake 0.38s ease; }
+
+/* Waiting label (other players' rolls) */
+
+.rollItemWaiting {
+  font-size: 0.72rem;
+  color: #3a2810;
+  font-style: italic;
+}
+
+/* Note shown to non-leaders */
+
+.rollsPanelNote {
+  font-size: 0.78rem;
+  color: #5a4828;
+  font-style: italic;
+  text-align: center;
+  padding: 8px 0 2px;
+  margin: 0;
+}
+
+/* Send button */
+
+.rollsPanelSend {
+  width: 100%;
+  padding: 9px 16px;
+  border: 1px solid rgba(184, 134, 11, 0.6);
+  background: linear-gradient(135deg, rgba(184, 134, 11, 0.15) 0%, rgba(122, 92, 30, 0.08) 100%);
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 8px rgba(184, 134, 11, 0.08);
+}
+.rollsPanelSend:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(184, 134, 11, 0.24) 0%, rgba(122, 92, 30, 0.14) 100%);
+  box-shadow: 0 0 18px rgba(184, 134, 11, 0.18);
+  border-color: rgba(184, 134, 11, 0.85);
+}
+.rollsPanelSend:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: #6a5020;
+  border-color: rgba(184, 134, 11, 0.2);
+}
+
+/* ── Rate limit notice ────────────────────────────────────────── */
+
+.rateLimitNote {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(30, 14, 2, 0.75);
+  border-left: 2px solid rgba(192, 122, 32, 0.6);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.rateLimitIcon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.rateLimitBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rateLimitTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.63rem;
+  font-weight: 700;
+  color: #c07a20;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rateLimitText {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.9rem;
+  color: #8a6840;
+  font-style: italic;
+}
+
+.rateLimitTimer {
+  color: #e8a040;
+  font-style: normal;
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+}
+
+/* ── Character card — inventory ──────────────────────────────── */
+
+.charItems {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(184, 134, 11, 0.15);
+}
+
+.charItemsHeader {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #b8860b;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.charItemsCount {
+  margin-left: auto;
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  color: #7a6030;
+  background: rgba(184, 134, 11, 0.1);
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.charItemsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.charItem {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  cursor: default;
+}
+
+.charItemDot {
+  color: #7a6030;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.charItemName {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.82rem;
+  color: #c8a860;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.charItemMore {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.75rem;
+  color: #7a6030;
+  font-style: italic;
+  padding-left: 10px;
+}
+
+/* ── Level up notice ──────────────────────────────────────────── */
+
+.levelUpNote {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(14, 28, 4, 0.80);
+  border-left: 2px solid rgba(140, 200, 60, 0.55);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.levelUpIcon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.levelUpBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.levelUpEntry {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.levelUpName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #a8d060;
+  letter-spacing: 0.04em;
+}
+
+.levelUpText {
+  color: #7a9850;
+  font-style: italic;
+}
+
+.levelUpLevel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #b8e070;
+}
+
+/* ── Item grant notice ────────────────────────────────────────── */
+
+.itemGrantNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(20, 14, 2, 0.80);
+  border-left: 2px solid rgba(192, 144, 32, 0.55);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.itemGrantIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+.itemGrantBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.itemGrantEntry {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.itemGrantChar {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #d4a840;
+  letter-spacing: 0.04em;
+}
+
+.itemGrantVerb {
+  color: #8a7040;
+  font-style: italic;
+}
+
+.itemGrantName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e8c060;
+}
+
+.itemGrantDesc {
+  color: #7a6535;
+  font-style: italic;
+  font-size: 0.85rem;
+}
 
 /* ── Input area ───────────────────────────────────────────────── */
 
@@ -707,57 +1563,60 @@
 .sendButtons {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
+  min-width: 88px;
 }
 
 .btnSpeak {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   justify-content: center;
-  padding: 6px 13px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: #6a5838;
+  padding: 9px 14px;
+  border: 1px solid rgba(184, 134, 11, 0.22);
+  background: rgba(184, 134, 11, 0.04);
+  color: #8a7050;
   font-family: 'Cinzel', serif;
-  font-size: 0.67rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
 .btnSpeak:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #9a8060;
-  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(184, 134, 11, 0.45);
+  color: #c9a030;
+  background: rgba(184, 134, 11, 0.08);
 }
 .btnSpeak:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .btnAct {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   justify-content: center;
-  padding: 8px 14px;
-  border: 1px solid rgba(184, 134, 11, 0.55);
-  background: rgba(184, 134, 11, 0.1);
+  padding: 10px 14px;
+  border: 1px solid rgba(184, 134, 11, 0.6);
+  background: linear-gradient(160deg, rgba(184,134,11,0.14) 0%, rgba(122,92,30,0.08) 100%);
   color: #e8c040;
   font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  box-shadow: 0 0 8px rgba(184,134,11,0.08);
 }
 .btnAct:hover:not(:disabled) {
-  background: rgba(184, 134, 11, 0.18);
-  border-color: rgba(184, 134, 11, 0.75);
-  box-shadow: 0 0 10px rgba(184, 134, 11, 0.12);
+  background: linear-gradient(160deg, rgba(184,134,11,0.22) 0%, rgba(122,92,30,0.14) 100%);
+  border-color: rgba(184, 134, 11, 0.85);
+  box-shadow: 0 0 16px rgba(184, 134, 11, 0.18);
+  color: #f0d060;
 }
 .btnAct:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -1264,6 +2123,6 @@
   }
 
   .sendButtons {
-    flex-direction: row;
+    min-width: unset;
   }
 }

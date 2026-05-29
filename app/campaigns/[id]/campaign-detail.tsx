@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { loader } from "@/lib/loader";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Character } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { JoinRequest } from "@/types/join-request";
@@ -115,16 +116,31 @@ export default function CampaignDetailPage() {
     });
   }, [id, router]);
 
-  // Poll join requests every 8 seconds so the owner sees new requests without refreshing.
+  // Real-time subscription for join requests and party changes.
   useEffect(() => {
     if (loading) return;
-    const timer = setInterval(async () => {
-      if (processingReq) return;
-      const res = await fetch(`/api/campaigns/${id}/requests`);
-      if (res.ok) setJoinRequests(await res.json() as JoinRequest[]);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [id, loading, processingReq]);
+
+    const supabase = createSupabaseClient();
+    const channel = supabase
+      .channel(`campaign:${id}`)
+      .on("broadcast", { event: "request_created" }, async () => {
+        const res = await fetch(`/api/campaigns/${id}/requests`, { cache: "no-store" });
+        if (res.ok) setJoinRequests(await res.json() as JoinRequest[]);
+      })
+      .on("broadcast", { event: "request_updated" }, ({ payload }: { payload: unknown }) => {
+        const { id: reqId, status } = payload as { id: string; status: JoinRequest["status"] };
+        setJoinRequests((prev) =>
+          prev.map((r) => (r.id === reqId ? { ...r, status } : r)),
+        );
+      })
+      .on("broadcast", { event: "party_changed" }, async () => {
+        const res = await fetch(`/api/campaigns/${id}`, { cache: "no-store" });
+        if (res.ok) setCampaign(await res.json() as CampaignDetail);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, loading]);
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -477,7 +493,10 @@ export default function CampaignDetailPage() {
                 <div key={char.id} className={s.slot}>
                   <div className={s.slotTop} />
                   <div className={s.slotAvatar}>
-                    {char.name[0].toUpperCase()}
+                    {char.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={char.image_url} alt={char.name} className={s.slotAvatarImg} />
+                    ) : char.name[0].toUpperCase()}
                   </div>
                   <div className={s.slotInfo}>
                     <div className={s.slotName}>{char.name}</div>
@@ -586,7 +605,10 @@ export default function CampaignDetailPage() {
                               type="button"
                             >
                               <div className={s.dropAvatar}>
-                                {c.name[0].toUpperCase()}
+                                {c.image_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={c.image_url} alt={c.name} className={s.dropAvatarImg} />
+                                ) : c.name[0].toUpperCase()}
                               </div>
                               <div className={s.dropInfo}>
                                 <div className={s.dropName}>{c.name}</div>
@@ -753,26 +775,6 @@ export default function CampaignDetailPage() {
           {isStarted && (
             <p className={s.ctaStartedDate}>
               Iniciada el {formatDate(campaign.started_at!)}
-            </p>
-          )}
-          <button
-            className={cx(s.ctaBtn, isStarted && s.ctaBtnContinue)}
-            onClick={handleStart}
-            disabled={starting || party.length === 0}
-            type="button"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <path d="M3 2L13 8L3 14V2Z" fill="currentColor" />
-            </svg>
-            {starting
-              ? "..."
-              : isStarted
-                ? "Continuar Aventura"
-                : "Comenzar Aventura"}
-          </button>
-          {party.length === 0 && (
-            <p className={s.ctaHint}>
-              Agrega al menos un aventurero para comenzar.
             </p>
           )}
         </div>

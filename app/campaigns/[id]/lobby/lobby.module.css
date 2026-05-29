@@ -271,6 +271,15 @@
   font-weight: 700;
   color: rgba(255,255,255,0.9);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.charAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
 
 .charInfo {
@@ -370,16 +379,23 @@
   align-items: center;
   gap: 5px;
   font-size: 0.75rem;
-  color: #4a6840;
+  color: #5a5040;
 }
 
 .readyDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.readyDotOnline {
   background: #3d8a3d;
   animation: pulse 2s ease-in-out infinite;
-  flex-shrink: 0;
+}
+
+.readyDotOffline {
+  background: #4a3a2a;
 }
 
 @keyframes pulse {
@@ -554,3 +570,135 @@
   transition: border-color 0.2s, color 0.2s;
 }
 .btnSecondary:hover { border-color: rgba(184, 134, 11, 0.6); color: #c9a030; }
+
+/* ── Responsive ───────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .header { padding: 0 12px; gap: 8px; }
+  .headerBadges { display: none; }
+  .campaignName { font-size: 0.75rem; }
+  .manageBtn { font-size: 8px; padding: 4px 7px; }
+
+  .body { padding: 20px 12px 40px; }
+  .scroll { gap: 20px; }
+
+  .titleBlock { padding: 20px 16px 16px; gap: 8px; }
+  .lobbyTitle { font-size: 1.05rem; }
+  .lobbySubtitle { font-size: 0.9rem; }
+
+  .partyGrid { grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .dmActions { padding: 20px 16px; }
+  .btnStart { padding: 11px 24px; font-size: 0.82rem; }
+
+  .playerWaiting { padding: 24px 16px; }
+}
+
+@media (max-width: 400px) {
+  .partyGrid { grid-template-columns: 1fr; }
+  .header { height: 42px; }
+  .campaignName { font-size: 0.7rem; }
+}
+
+/* ── DM abandoned overlay ─────────────────────────────────────── */
+
+.abandonedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 4, 10, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.abandonedCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 36px;
+  max-width: 420px;
+  width: 90%;
+  background: linear-gradient(160deg, rgba(22,8,8,0.98) 0%, rgba(12,5,5,0.96) 100%);
+  border: 1px solid rgba(184, 74, 74, 0.35);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.abandonedTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0a0a0;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.abandonedSub {
+  font-size: 0.92rem;
+  color: #7a5050;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Expelled overlay ─────────────────────────────────────────── */
+
+.expelledOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 4, 10, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.expelledCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 44px 40px 36px;
+  max-width: 420px;
+  width: 90%;
+  background: linear-gradient(160deg, rgba(22,8,8,0.98) 0%, rgba(12,5,5,0.96) 100%);
+  border: 1px solid rgba(184, 74, 74, 0.4);
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px rgba(184,74,74,0.15),
+    0 24px 60px rgba(0,0,0,0.8);
+  text-align: center;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.expelledTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0a0a0;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.expelledSub {
+  font-size: 0.92rem;
+  color: #7a5050;
+  margin: 0;
+  line-height: 1.6;
+}
