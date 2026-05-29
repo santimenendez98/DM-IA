@@ -254,7 +254,7 @@ export default function Dashboard() {
         const res = await fetch("/api/campaigns/joined", { cache: "no-store" });
         if (res.ok) setJoinedCampaigns(await res.json());
       })
-      .on("broadcast", { event: "campaign_started" }, ({ payload }) => {
+      .on("broadcast", { event: "campaign_started" }, ({ payload }: { payload: unknown }) => {
         const { campaign_id, started_at } = payload as { campaign_id: string; started_at: string };
         setJoinedCampaigns((prev) =>
           prev.map((c) => (c.id === campaign_id ? { ...c, started_at } : c)),

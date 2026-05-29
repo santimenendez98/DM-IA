@@ -179,7 +179,7 @@ export default function Messages() {
 
     const ch = supabase
       .channel(`chat:${selectedId}`)
-      .on("broadcast", { event: "new_message" }, ({ payload }) => {
+      .on("broadcast", { event: "new_message" }, ({ payload }: { payload: unknown }) => {
         addMsg(payload as ChatMessage);
       })
       .on(
@@ -190,7 +190,7 @@ export default function Messages() {
           table: "campaign_chat",
           filter: `campaign_id=eq.${selectedId}`,
         },
-        (payload) => {
+        (payload: { new: unknown }) => {
           addMsg(payload.new as ChatMessage);
         },
       )

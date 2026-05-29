@@ -127,7 +127,7 @@ export default function CampaignDetailPage() {
         const res = await fetch(`/api/campaigns/${id}/requests`, { cache: "no-store" });
         if (res.ok) setJoinRequests(await res.json() as JoinRequest[]);
       })
-      .on("broadcast", { event: "request_updated" }, ({ payload }) => {
+      .on("broadcast", { event: "request_updated" }, ({ payload }: { payload: unknown }) => {
         const { id: reqId, status } = payload as { id: string; status: JoinRequest["status"] };
         setJoinRequests((prev) =>
           prev.map((r) => (r.id === reqId ? { ...r, status } : r)),

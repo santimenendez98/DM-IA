@@ -23,7 +23,7 @@ async function isMember(campaignId: string, userId: string): Promise<boolean> {
     .eq("campaign_id", campaignId);
 
   return (members ?? []).some(
-    (m) => (m.characters as { user_id: string } | null)?.user_id === userId,
+    (m) => (m.characters as unknown as { user_id: string } | null)?.user_id === userId,
   );
 }
 
@@ -49,7 +49,7 @@ function notifyChatMembers(
     const memberIds = new Set<string>();
     memberIds.add(campaign.user_id as string);
     for (const c of chars ?? []) {
-      const uid = (c.characters as { user_id: string } | null)?.user_id;
+      const uid = (c.characters as unknown as { user_id: string } | null)?.user_id;
       if (uid) memberIds.add(uid);
     }
 

@@ -149,9 +149,9 @@ export default function Lobby() {
 
     channel
       // ── Presence: someone entered the lobby ───────────────────
-      .on("presence", { event: "join" }, ({ newPresences }) => {
+      .on("presence", { event: "join" }, ({ newPresences }: { newPresences: unknown[] }) => {
         const hasOther = newPresences.some(
-          (p) => (p as { user_id?: string }).user_id !== userIdRef.current,
+          (p: unknown) => (p as { user_id?: string }).user_id !== userIdRef.current,
         );
         if (hasOther) refetchParty();
         setOnlineUsers(buildOnlineSet(channel.presenceState()));
@@ -160,7 +160,7 @@ export default function Lobby() {
       .on("broadcast", { event: "player_joined" }, () => refetchParty())
       .on("broadcast", { event: "party_changed"  }, () => refetchParty())
       // ── Broadcast: player expelled ────────────────────────────
-      .on("broadcast", { event: "player_expelled" }, ({ payload }) => {
+      .on("broadcast", { event: "player_expelled" }, ({ payload }: { payload: unknown }) => {
         const p = payload as { user_id: string };
         if (p.user_id === userIdRef.current) setExpelled(true);
         else refetchParty();
@@ -181,7 +181,7 @@ export default function Lobby() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "campaigns",
           filter: `id=eq.${campaign.id}` },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const updated = payload.new as Partial<LobbyData>;
           setCampaign((prev) => prev ? { ...prev, ...updated } : prev);
           if (updated.started_at && userIdRef.current !== campaignRef.current?.user_id) {
@@ -201,18 +201,18 @@ export default function Lobby() {
         router.replace(`/campaigns/${camp.id}/play`);
       })
       // ── Presence: DM left lobby ───────────────────────────────
-      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+      .on("presence", { event: "leave" }, ({ leftPresences }: { leftPresences: unknown[] }) => {
         const uid = userIdRef.current;
         const camp = campaignRef.current;
         setOnlineUsers(buildOnlineSet(channel.presenceState()));
         if (!camp || uid === camp.user_id) return;
 
         const dmLeft = leftPresences.some(
-          (p) => (p as { role?: string }).role === "dm",
+          (p: unknown) => (p as { role?: string }).role === "dm",
         );
         if (dmLeft && !camp.started_at) setDmAbandoned(true);
       })
-      .subscribe(async (status) => {
+      .subscribe(async (status: string) => {
         if (status !== "SUBSCRIBED") return;
         await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
         // Seed initial presence after tracking so our own entry is included

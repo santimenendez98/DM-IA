@@ -148,7 +148,7 @@ export default function NotificationsBell({ userId }: Props) {
     const supabase = createClient();
     const channel = supabase
       .channel(`notifications:${userId}`)
-      .on("broadcast", { event: "new_notification" }, ({ payload }) => {
+      .on("broadcast", { event: "new_notification" }, ({ payload }: { payload: unknown }) => {
         const notif = payload as AppNotification;
         setNotifications((prev) => [notif, ...prev].slice(0, 50));
       })

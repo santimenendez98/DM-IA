@@ -1116,7 +1116,7 @@ export default function Play() {
         setKicked(true);
       })
       // ── Broadcast: instant delivery without DB polling ────────
-      .on("broadcast", { event: "new_message" }, ({ payload }) => {
+      .on("broadcast", { event: "new_message" }, ({ payload }: { payload: unknown }) => {
         const msg = payload as Message;
         setMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
@@ -1128,7 +1128,7 @@ export default function Play() {
         setLevelUpQueue([]);
         setItemGrantQueue([]);
       })
-      .on("broadcast", { event: "dm_response" }, ({ payload }) => {
+      .on("broadcast", { event: "dm_response" }, ({ payload }: { payload: unknown }) => {
         const { hp_updates, level_updates, item_grants, ...msg } = payload as Message & {
           hp_updates?: HpUpdateItem[];
           level_updates?: LevelUpItem[];
@@ -1144,7 +1144,7 @@ export default function Play() {
         if (item_grants?.length) applyItemGrants(item_grants);
       })
       // ── Broadcast: player typing indicators ──────────────────
-      .on("broadcast", { event: "typing_start" }, ({ payload }) => {
+      .on("broadcast", { event: "typing_start" }, ({ payload }: { payload: unknown }) => {
         const { character_id, character_name } = payload as { character_id: string; character_name: string };
         // Skip own characters
         const mine = (campaignRef.current?.characters ?? [])
@@ -1167,14 +1167,14 @@ export default function Play() {
 
         setTypingUsers((prev) => new Map(prev).set(character_id, { name: character_name, color }));
       })
-      .on("broadcast", { event: "typing_stop" }, ({ payload }) => {
+      .on("broadcast", { event: "typing_stop" }, ({ payload }: { payload: unknown }) => {
         const { character_id } = payload as { character_id: string };
         const timer = typingTimeoutsRef.current.get(character_id);
         if (timer) { clearTimeout(timer); typingTimeoutsRef.current.delete(character_id); }
         setTypingUsers((prev) => { const m = new Map(prev); m.delete(character_id); return m; });
       })
       // ── Broadcast: democratic vote ────────────────────────────
-      .on("broadcast", { event: "vote_start" }, ({ payload }) => {
+      .on("broadcast", { event: "vote_start" }, ({ payload }: { payload: unknown }) => {
         const { proposer_id, character_id, character_name, content, voter_ids } = payload as {
           proposer_id: string; character_id: string; character_name: string;
           content: string; voter_ids: string[];
@@ -1195,7 +1195,7 @@ export default function Play() {
           if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
         }, VOTE_DURATION * 1000);
       })
-      .on("broadcast", { event: "vote_cast" }, ({ payload }) => {
+      .on("broadcast", { event: "vote_cast" }, ({ payload }: { payload: unknown }) => {
         const { voter_id, vote } = payload as { voter_id: string; vote: boolean };
         setActiveVote((prev) =>
           prev ? { ...prev, votes: { ...prev.votes, [voter_id]: vote } } : prev,
@@ -1208,12 +1208,12 @@ export default function Play() {
         setVoteCountdown(0);
       })
       // ── Broadcast: rate limit notice (shown to all players) ──
-      .on("broadcast", { event: "rate_limit" }, ({ payload }) => {
+      .on("broadcast", { event: "rate_limit" }, ({ payload }: { payload: unknown }) => {
         const { limit_type, retry_in } = payload as { limit_type: "minute" | "day"; retry_in: number };
         startRateLimitCountdown(limit_type ?? "minute", retry_in ?? 0);
       })
       // ── Broadcast: shared player roll result ──────────────────
-      .on("broadcast", { event: "player_roll" }, ({ payload }) => {
+      .on("broadcast", { event: "player_roll" }, ({ payload }: { payload: unknown }) => {
         const { charName, diceRoll, msgId } = payload as {
           charName: string; diceRoll: number; msgId: string | null;
         };
@@ -1226,7 +1226,7 @@ export default function Play() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "campaign_messages",
           filter: `campaign_id=eq.${campaign.id}` },
-        (payload) => {
+        (payload: { new: unknown }) => {
           const raw = payload.new as Message;
           const chars = campaignRef.current?.characters ?? [];
           const char  = chars.find((c) => c.id === raw.character_id);
@@ -1239,16 +1239,16 @@ export default function Play() {
         },
       )
       // DM presence left → redirect players to dashboard (fallback for unexpected disconnects)
-      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+      .on("presence", { event: "leave" }, ({ leftPresences }: { leftPresences: unknown[] }) => {
         const uid  = userIdRef.current;
         const camp = campaignRef.current;
         if (!camp || uid === camp.user_id) return;
         const dmLeft = leftPresences.some(
-          (p) => (p as { role?: string }).role === "dm",
+          (p: unknown) => (p as { role?: string }).role === "dm",
         );
         if (dmLeft) setKicked(true);
       })
-      .subscribe(async (status) => {
+      .subscribe(async (status: string) => {
         if (status !== "SUBSCRIBED") return;
         const isDM = campaignRef.current?.user_id === userIdRef.current;
         await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
