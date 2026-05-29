@@ -60,7 +60,7 @@ function formatDate(iso: string): string {
 
 // ── Stat card data ─────────────────────────────────────────────
 
-const STATS = [
+const STATS: Array<{ label: string; comingSoon?: boolean; icon: React.ReactNode }> = [
   {
     label: "Campañas Activas",
     icon: (
@@ -84,6 +84,7 @@ const STATS = [
   },
   {
     label: "Sesiones Jugadas",
+    comingSoon: true,
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
         <polygon
@@ -99,6 +100,7 @@ const STATS = [
   },
   {
     label: "Logros Desbloqueados",
+    comingSoon: true,
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
         <path
@@ -123,7 +125,7 @@ const STATS = [
 
 // ── Quick actions ──────────────────────────────────────────────
 
-const ACTIONS = [
+const ACTIONS: Array<{ title: string; sub: string; href: string | null; comingSoon?: boolean; icon: React.ReactNode }> = [
   {
     title: "Nueva Campaña",
     sub: "Traza el inicio de una nueva aventura",
@@ -173,6 +175,7 @@ const ACTIONS = [
     title: "Ver Historial",
     sub: "Revive las crónicas de tus partidas",
     href: null,
+    comingSoon: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
         <rect x="3" y="2" width="12" height="14" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
@@ -211,6 +214,8 @@ export default function Dashboard() {
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [guildOpen, setGuildOpen]     = useState(false);
   const [joinCodeOpen, setJoinCodeOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
+  const [leavingId, setLeavingId]     = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -276,6 +281,17 @@ export default function Dashboard() {
     if (res.ok) setJoinedCampaigns(await res.json());
   }
 
+  async function leaveCampaign(id: string) {
+    setLeavingId(id);
+    setConfirmLeave(null);
+    try {
+      await fetch(`/api/campaigns/${id}/leave`, { method: "POST" });
+      setJoinedCampaigns((prev) => prev.filter((c) => c.id !== id));
+    } finally {
+      setLeavingId(null);
+    }
+  }
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -290,7 +306,7 @@ export default function Dashboard() {
     user?.user_metadata?.username ?? user?.email?.split("@")[0] ?? "Aventurero";
   const initial: string = displayName[0]?.toUpperCase() ?? "A";
 
-  const statValues = [campaigns.length, characters.length, 0, 0];
+  const statValues = [campaigns.length, characters.length];
 
   return (
     <div className={s.page}>
@@ -363,9 +379,13 @@ export default function Dashboard() {
 
         <div className={s.statsGrid}>
           {STATS.map((stat, i) => (
-            <div key={stat.label} className={s.statCard}>
+            <div key={stat.label} className={cx(s.statCard, stat.comingSoon && s.statCardDimmed)}>
               <div className={s.statIcon}>{stat.icon}</div>
-              <div className={s.statValue}>{loading ? "—" : statValues[i]}</div>
+              {stat.comingSoon ? (
+                <div className={s.statComingSoon}>Próximamente</div>
+              ) : (
+                <div className={s.statValue}>{loading ? "—" : statValues[i]}</div>
+              )}
               <div className={s.statLabel}>{stat.label}</div>
             </div>
           ))}
@@ -384,17 +404,21 @@ export default function Dashboard() {
           {ACTIONS.map((action) => (
             <button
               key={action.title}
-              className={s.actionCard}
+              className={cx(s.actionCard, action.comingSoon && s.actionCardDimmed)}
+              disabled={action.comingSoon}
               onClick={() => {
+                if (action.comingSoon) return;
                 if (action.href) { router.push(action.href); return; }
                 if (action.title === "Explorar el Gremio")  { setGuildOpen(true); return; }
                 if (action.title === "Unirse con Código")   { setJoinCodeOpen(true); return; }
-                alert(`${action.title} — próximamente`);
               }}
             >
               <div className={s.actionCardIcon}>{action.icon}</div>
               <div className={s.actionCardText}>
-                <span className={s.actionCardTitle}>{action.title}</span>
+                <span className={s.actionCardTitle}>
+                  {action.title}
+                  {action.comingSoon && <span className={s.soonBadge}>Próximamente</span>}
+                </span>
                 <span className={s.actionCardSub}>{action.sub}</span>
               </div>
             </button>
@@ -538,9 +562,15 @@ export default function Dashboard() {
             ) : (
               <div className={s.campaignGrid}>
                 {joinedCampaigns.map((c) => {
-                  const isStarted = c.started_at !== null;
+                  const isStarted    = c.started_at !== null;
+                  const isLeaving    = leavingId === c.id;
+                  const isConfirming = confirmLeave === c.id;
                   return (
-                    <div key={c.id} className={cx(s.campaignCard, isStarted && s.campaignCardActive)}>
+                    <div
+                      key={c.id}
+                      className={cx(s.campaignCard, isStarted && s.campaignCardActive)}
+                      onClick={() => confirmLeave && setConfirmLeave(null)}
+                    >
                       <div className={s.campaignCardTop} />
                       <div className={s.campaignInfo}>
                         <div className={s.campaignName}>{c.name}</div>
@@ -566,10 +596,32 @@ export default function Dashboard() {
                       <div className={s.campaignCardActions}>
                         <button
                           className={s.btnPlay}
-                          onClick={() => { loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
+                          onClick={(e) => { e.stopPropagation(); loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
                         >
                           Entrar →
                         </button>
+                        {isConfirming ? (
+                          <button
+                            className={cx(s.btnDelete, s.btnDeleteConfirm)}
+                            onClick={(e) => { e.stopPropagation(); leaveCampaign(c.id); }}
+                            disabled={isLeaving}
+                          >
+                            {isLeaving ? "···" : "¿Salir?"}
+                          </button>
+                        ) : (
+                          <button
+                            className={s.btnDelete}
+                            onClick={(e) => { e.stopPropagation(); setConfirmLeave(c.id); }}
+                            disabled={isLeaving}
+                            title="Salir de la campaña"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
+                              <path d="M4 2H2v7h2" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                              <path d="M7 4l2 1.5-2 1.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                              <line x1="9" y1="5.5" x2="5" y2="5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

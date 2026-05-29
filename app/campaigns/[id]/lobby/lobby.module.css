@@ -379,16 +379,23 @@
   align-items: center;
   gap: 5px;
   font-size: 0.75rem;
-  color: #4a6840;
+  color: #5a5040;
 }
 
 .readyDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.readyDotOnline {
   background: #3d8a3d;
   animation: pulse 2s ease-in-out infinite;
-  flex-shrink: 0;
+}
+
+.readyDotOffline {
+  background: #4a3a2a;
 }
 
 @keyframes pulse {

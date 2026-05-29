@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
-import type { Character, CharacterStats } from "@/types/character";
+import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
 import { cx } from "@/components/cx";
@@ -28,6 +28,13 @@ interface LevelUpItem {
   character_id: string;
   name: string;
   level: number;
+}
+
+interface ItemGrantItem {
+  character_id: string;
+  character_name: string;
+  item: string;
+  description: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────
@@ -199,6 +206,32 @@ function CharacterCard({
           );
         })}
       </div>
+
+      {character.items?.length > 0 && (
+        <div className={s.charItems}>
+          <div className={s.charItemsHeader}>
+            <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
+              <rect x="1" y="4.5" width="10" height="7" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.1" />
+              <path d="M1 6.5h10" stroke="#b8860b" strokeWidth="0.9" />
+              <path d="M4 4.5C4 3 4.8 1.5 6 1.5s2 1.5 2 3" fill="none" stroke="#b8860b" strokeWidth="1.1" strokeLinecap="round" />
+              <line x1="6" y1="4.5" x2="6" y2="11.5" stroke="#b8860b" strokeWidth="0.9" />
+            </svg>
+            <span>Inventario</span>
+            <span className={s.charItemsCount}>{character.items.length}</span>
+          </div>
+          <ul className={s.charItemsList}>
+            {character.items.slice(0, 5).map((item, i) => (
+              <li key={i} className={s.charItem} title={item.description || undefined}>
+                <span className={s.charItemDot} aria-hidden>·</span>
+                <span className={s.charItemName}>{item.name}</span>
+              </li>
+            ))}
+            {character.items.length > 5 && (
+              <li className={s.charItemMore}>+{character.items.length - 5} más</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -465,6 +498,35 @@ function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
             <span className={s.levelUpName}>{u.name}</span>
             <span className={s.levelUpText}> ha alcanzado el </span>
             <span className={s.levelUpLevel}>Nivel {u.level}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Item grant notice (shown in chat when DM gives an item) ───
+
+function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
+  return (
+    <div className={s.itemGrantNote}>
+      <div className={s.itemGrantIcon} aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16">
+          <rect x="1" y="6" width="14" height="9" rx="1.5" fill="none" stroke="#c09020" strokeWidth="1.2" />
+          <path d="M1 9h14" stroke="#c09020" strokeWidth="1" />
+          <path d="M5.5 6C5.5 4 6.5 2 8 2s2.5 2 2.5 4" fill="none" stroke="#c09020" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="8" y1="6" x2="8" y2="15" stroke="#c09020" strokeWidth="1" />
+        </svg>
+      </div>
+      <div className={s.itemGrantBody}>
+        {grants.map((g, i) => (
+          <div key={i} className={s.itemGrantEntry}>
+            <span className={s.itemGrantChar}>{g.character_name}</span>
+            <span className={s.itemGrantVerb}> recibe </span>
+            <span className={s.itemGrantName}>{g.item}</span>
+            {g.description && (
+              <span className={s.itemGrantDesc}> — {g.description}</span>
+            )}
           </div>
         ))}
       </div>
@@ -908,6 +970,7 @@ export default function Play() {
   const [rateLimitSecsLeft, setRateLimitSecsLeft] = useState(0);
   const [rateLimitType, setRateLimitType] = useState<"minute" | "day" | null>(null);
   const [levelUpQueue, setLevelUpQueue] = useState<LevelUpItem[]>([]);
+  const [itemGrantQueue, setItemGrantQueue] = useState<ItemGrantItem[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1063,11 +1126,13 @@ export default function Play() {
       .on("broadcast", { event: "dm_thinking" }, () => {
         setDmThinking(true);
         setLevelUpQueue([]);
+        setItemGrantQueue([]);
       })
       .on("broadcast", { event: "dm_response" }, ({ payload }) => {
-        const { hp_updates, level_updates, ...msg } = payload as Message & {
+        const { hp_updates, level_updates, item_grants, ...msg } = payload as Message & {
           hp_updates?: HpUpdateItem[];
           level_updates?: LevelUpItem[];
+          item_grants?: ItemGrantItem[];
         };
         setMessages((prev) => {
           if (prev.some((m) => m.id === (msg as Message).id)) return prev;
@@ -1076,6 +1141,7 @@ export default function Play() {
         setDmThinking(false);
         if (hp_updates?.length) applyHpUpdates(hp_updates);
         if (level_updates?.length) applyLevelUpdates(level_updates);
+        if (item_grants?.length) applyItemGrants(item_grants);
       })
       // ── Broadcast: player typing indicators ──────────────────
       .on("broadcast", { event: "typing_start" }, ({ payload }) => {
@@ -1203,11 +1269,14 @@ export default function Play() {
   // ── Player intro fallback poll ─────────────────────────────
   // If Realtime isn't configured yet (tables not in publication),
   // players poll every 6 s until the DM's opening narration arrives.
+  // Using a boolean dep (hasMessages) instead of messages.length prevents
+  // the timer from restarting on every new message that arrives.
 
+  const hasMessages = messages.length > 0;
   useEffect(() => {
     if (loading || !campaign || !userId) return;
     const isDM = campaign.user_id === userId;
-    if (isDM || messages.length > 0) return;
+    if (isDM || hasMessages) return;
 
     const timer = setInterval(async () => {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`);
@@ -1217,7 +1286,7 @@ export default function Play() {
     }, 6000);
 
     return () => clearInterval(timer);
-  }, [loading, campaign, userId, messages.length]);
+  }, [loading, campaign?.id, userId, hasMessages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-resize textarea ───────────────────────────────────
 
@@ -1338,7 +1407,7 @@ export default function Play() {
     setInput("");
     setSendError(null);
     setSending(true);
-    if (withDm) { setDmThinking(true); setLevelUpQueue([]); }
+    if (withDm) { setDmThinking(true); setLevelUpQueue([]); setItemGrantQueue([]); }
 
     try {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`, {
@@ -1361,6 +1430,7 @@ export default function Play() {
         retry_in?: number;
         hp_updates?: HpUpdateItem[];
         level_updates?: LevelUpItem[];
+        item_grants?: ItemGrantItem[];
       };
 
       setMessages((prev) => {
@@ -1373,6 +1443,7 @@ export default function Play() {
 
       if (data.hp_updates?.length) applyHpUpdates(data.hp_updates);
       if (data.level_updates?.length) applyLevelUpdates(data.level_updates);
+      if (data.item_grants?.length) applyItemGrants(data.item_grants);
 
       if (data.dm_error === "rate_limit") {
         const limitType = data.limit_type ?? "minute";
@@ -1563,6 +1634,27 @@ export default function Play() {
     setLevelUpQueue(updates);
   }, []);
 
+  // ── Apply item grants to local campaign state ─────────────────
+
+  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
+    if (!grants.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const newItems = grants
+            .filter((g) => g.character_id === c.id)
+            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
+          return newItems.length > 0
+            ? { ...c, items: [...(c.items ?? []), ...newItems] }
+            : c;
+        }),
+      };
+    });
+    setItemGrantQueue(grants);
+  }, []);
+
   // ── Rate limit countdown (shared by sender + broadcast receivers) ─
 
   const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
@@ -1644,6 +1736,48 @@ export default function Play() {
     }
   }, [messages, dmThinking]);
 
+  // ── Derived (must be before early returns — Rules of Hooks) ───
+
+  const isLeader = campaign?.user_id === userId;
+
+  const myChars = useMemo(
+    () => (campaign?.characters ?? []).filter((c) => c.user_id === userId),
+    [campaign?.characters, userId],
+  );
+
+  const activeChar = useMemo(
+    () => (campaign?.characters ?? []).find((c) => c.id === activeCharId),
+    [campaign?.characters, activeCharId],
+  );
+
+  const charColorMap = useMemo(
+    () => Object.fromEntries(
+      (campaign?.characters ?? []).map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
+    ),
+    [campaign?.characters],
+  );
+
+  const charImgMap = useMemo(
+    () => Object.fromEntries((campaign?.characters ?? []).map((c) => [c.id, c.image_url])),
+    [campaign?.characters],
+  );
+
+  const myCharNames = useMemo(
+    () => new Set(myChars.map((c) => c.name)),
+    [myChars],
+  );
+
+  const charsByName = useMemo(
+    () => new Map((campaign?.characters ?? []).map((c) => [c.name, c])),
+    [campaign?.characters],
+  );
+
+  const lastMsg = messages[messages.length - 1];
+  const pendingRolls = useMemo(() => {
+    if (dmThinking || !lastMsg || lastMsg.role !== "dm") return [];
+    return parseRollRequests(lastMsg.content).rolls;
+  }, [lastMsg, dmThinking]);
+
   // ── Loading ────────────────────────────────────────────────
 
   if (loading) {
@@ -1671,30 +1805,6 @@ export default function Play() {
       </div>
     );
   }
-
-  // ── Derived ────────────────────────────────────────────────
-
-  const isLeader = campaign.user_id === userId;
-
-  // Characters the current user can speak as (owned by them)
-  const myChars = campaign.characters.filter((c) => c.user_id === userId);
-  const activeChar = campaign.characters.find((c) => c.id === activeCharId);
-  const charColorMap = Object.fromEntries(
-    campaign.characters.map((c, i) => [c.id, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
-  );
-  const charImgMap = Object.fromEntries(
-    campaign.characters.map((c) => [c.id, c.image_url]),
-  );
-
-  // Detect pending roll requests from last DM message
-  const lastMsg = messages[messages.length - 1];
-  const pendingRolls =
-    !dmThinking && lastMsg?.role === "dm"
-      ? parseRollRequests(lastMsg.content).rolls
-      : [];
-
-  const myCharNames = new Set(myChars.map((c) => c.name));
-  const charsByName = new Map(campaign.characters.map((c) => [c.name, c]));
 
   // ── JSX ────────────────────────────────────────────────────
 
@@ -1896,6 +2006,9 @@ export default function Play() {
             )}
             {!dmThinking && levelUpQueue.length > 0 && (
               <LevelUpNote updates={levelUpQueue} />
+            )}
+            {!dmThinking && itemGrantQueue.length > 0 && (
+              <ItemGrantNote grants={itemGrantQueue} />
             )}
             <div ref={messagesEndRef} />
           </div>

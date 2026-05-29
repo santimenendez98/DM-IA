@@ -1300,6 +1300,80 @@
   font-size: 0.88rem;
 }
 
+/* ── Character card — inventory ──────────────────────────────── */
+
+.charItems {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(184, 134, 11, 0.15);
+}
+
+.charItemsHeader {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #b8860b;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.charItemsCount {
+  margin-left: auto;
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  color: #7a6030;
+  background: rgba(184, 134, 11, 0.1);
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.charItemsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.charItem {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  cursor: default;
+}
+
+.charItemDot {
+  color: #7a6030;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.charItemName {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.82rem;
+  color: #c8a860;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.charItemMore {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.75rem;
+  color: #7a6030;
+  font-style: italic;
+  padding-left: 10px;
+}
+
 /* ── Level up notice ──────────────────────────────────────────── */
 
 .levelUpNote {
@@ -1348,6 +1422,63 @@
   font-size: 0.84rem;
   font-weight: 700;
   color: #b8e070;
+}
+
+/* ── Item grant notice ────────────────────────────────────────── */
+
+.itemGrantNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 16px;
+  background: rgba(20, 14, 2, 0.80);
+  border-left: 2px solid rgba(192, 144, 32, 0.55);
+  border-radius: 0 4px 4px 0;
+  animation: fadeIn 0.18s ease;
+}
+
+.itemGrantIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+.itemGrantBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.itemGrantEntry {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.itemGrantChar {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #d4a840;
+  letter-spacing: 0.04em;
+}
+
+.itemGrantVerb {
+  color: #8a7040;
+  font-style: italic;
+}
+
+.itemGrantName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e8c060;
+}
+
+.itemGrantDesc {
+  color: #7a6535;
+  font-style: italic;
+  font-size: 0.85rem;
 }
 
 /* ── Input area ───────────────────────────────────────────────── */

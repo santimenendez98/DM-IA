@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
@@ -60,12 +60,14 @@ export default function Lobby() {
   const [dmAbandoned, setDmAbandoned] = useState(false);
   const [expelled, setExpelled] = useState(false);
   const [campaignDeleted, setCampaignDeleted] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   // Keep a ref so Realtime callbacks always see the latest values
-  const campaignRef = useRef<LobbyData | null>(null);
-  const userIdRef   = useRef<string>("");
+  const campaignRef       = useRef<LobbyData | null>(null);
+  const userIdRef         = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const channelRef  = useRef<any>(null);
+  const channelRef        = useRef<any>(null);
+  const refetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { campaignRef.current = campaign; }, [campaign]);
   useEffect(() => { userIdRef.current = userId; },     [userId]);
 
@@ -123,11 +125,26 @@ export default function Lobby() {
     });
     channelRef.current = channel;
 
-    const refetchParty = async () => {
-      const cid = campaignRef.current?.id;
-      if (!cid) return;
-      const res = await fetch(`/api/campaigns/${cid}`, { cache: "no-store" });
-      if (res.ok) setCampaign(await res.json() as LobbyData);
+    // Debounced so rapid-fire Realtime events (presence + broadcast) collapse into one fetch.
+    const refetchParty = () => {
+      if (refetchDebounceRef.current) clearTimeout(refetchDebounceRef.current);
+      refetchDebounceRef.current = setTimeout(async () => {
+        const cid = campaignRef.current?.id;
+        if (!cid) return;
+        const res = await fetch(`/api/campaigns/${cid}`);
+        if (res.ok) setCampaign(await res.json() as LobbyData);
+      }, 200);
+    };
+
+    const buildOnlineSet = (state: Record<string, unknown[]>): Set<string> => {
+      const ids = new Set<string>();
+      for (const presences of Object.values(state)) {
+        for (const p of presences) {
+          const uid = (p as { user_id?: string }).user_id;
+          if (uid) ids.add(uid);
+        }
+      }
+      return ids;
     };
 
     channel
@@ -137,6 +154,7 @@ export default function Lobby() {
           (p) => (p as { user_id?: string }).user_id !== userIdRef.current,
         );
         if (hasOther) refetchParty();
+        setOnlineUsers(buildOnlineSet(channel.presenceState()));
       })
       // ── Broadcast: player joined or party changed ─────────────
       .on("broadcast", { event: "player_joined" }, () => refetchParty())
@@ -186,6 +204,7 @@ export default function Lobby() {
       .on("presence", { event: "leave" }, ({ leftPresences }) => {
         const uid = userIdRef.current;
         const camp = campaignRef.current;
+        setOnlineUsers(buildOnlineSet(channel.presenceState()));
         if (!camp || uid === camp.user_id) return;
 
         const dmLeft = leftPresences.some(
@@ -196,12 +215,18 @@ export default function Lobby() {
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         await channel.track({ user_id: userId, role: isDM ? "dm" : "player" });
+        // Seed initial presence after tracking so our own entry is included
+        setOnlineUsers(buildOnlineSet(channel.presenceState()));
         if (!isDM) {
           fetch(`/api/campaigns/${campaign.id}/lobby/entered`, { method: "POST" }).catch(() => {});
         }
       });
 
-    return () => { channelRef.current = null; supabase.removeChannel(channel); };
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+      if (refetchDebounceRef.current) clearTimeout(refetchDebounceRef.current);
+    };
   }, [loading, userId, campaign?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Start handler ─────────────────────────────────────────────
@@ -239,6 +264,25 @@ export default function Lobby() {
     router.push(`/campaigns/${id}/play`);
   }
 
+  // ── Derived state (must be before early returns — Rules of Hooks) ──
+
+  const isDM = campaign?.user_id === userId;
+
+  const { otherPlayerIds, isMultiplayer, missingPlayers, allPlayersOnline, canStart } =
+    useMemo(() => {
+      const chars = campaign?.characters ?? [];
+      const otherPlayerIds = [...new Set(
+        chars.filter((c) => c.user_id !== userId).map((c) => c.user_id),
+      )];
+      const isMultiplayer    = otherPlayerIds.length > 0;
+      const missingPlayers   = isMultiplayer
+        ? otherPlayerIds.filter((uid) => !onlineUsers.has(uid))
+        : [];
+      const allPlayersOnline = missingPlayers.length === 0;
+      const canStart         = chars.length > 0 && allPlayersOnline;
+      return { otherPlayerIds, isMultiplayer, missingPlayers, allPlayersOnline, canStart };
+    }, [campaign?.characters, userId, onlineUsers]);
+
   // ── Loading / not found ───────────────────────────────────────
 
   if (loading) {
@@ -266,8 +310,6 @@ export default function Lobby() {
       </div>
     );
   }
-
-  const isDM = campaign.user_id === userId;
 
   // ── JSX ───────────────────────────────────────────────────────
 
@@ -475,8 +517,11 @@ export default function Lobby() {
                       </div>
 
                       <div className={s.charReady}>
-                        <span className={s.readyDot} />
-                        En espera
+                        <span className={cx(
+                          s.readyDot,
+                          onlineUsers.has(char.user_id) ? s.readyDotOnline : s.readyDotOffline,
+                        )} />
+                        {onlineUsers.has(char.user_id) ? "En el lobby" : "Fuera de línea"}
                       </div>
                     </div>
                   );
@@ -492,7 +537,7 @@ export default function Lobby() {
               <button
                 className={s.btnStart}
                 onClick={handleStart}
-                disabled={starting || campaign.characters.length === 0}
+                disabled={starting || !canStart}
                 type="button"
               >
                 {starting ? (
@@ -508,8 +553,16 @@ export default function Lobby() {
                   ? "Continuar aventura"
                   : "Comenzar aventura"}
               </button>
+
               {campaign.characters.length === 0 && (
                 <p className={s.dmHint}>Necesitas al menos un aventurero para comenzar.</p>
+              )}
+              {campaign.characters.length > 0 && isMultiplayer && !allPlayersOnline && (
+                <p className={s.dmHint}>
+                  {missingPlayers.length === 1
+                    ? "Falta 1 jugador por conectarse al lobby."
+                    : `Faltan ${missingPlayers.length} jugadores por conectarse al lobby.`}
+                </p>
               )}
             </div>
           )}

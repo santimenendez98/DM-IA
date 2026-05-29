@@ -90,6 +90,10 @@ function buildSystemInstruction(
     `LEVEL_UP:{"personaje":"Nombre","nivel":5}`,
     `Solo cuando el avance de la historia lo justifique. "nivel" = nuevo nivel del personaje (2–20).`,
 
+    `\nÍTEMS — cuando la historia justifique que un personaje recibe un objeto (botín, recompensa, regalo, hallazgo), narra el momento y añade AL FINAL (una línea por ítem, sin corchetes):`,
+    `ITEM_GRANT:{"personaje":"Nombre","item":"Nombre del ítem","descripcion":"Descripción breve del ítem"}`,
+    `Solo para objetos narrativamente relevantes. No añadas ítems triviales. "descripcion" máximo 80 caracteres.`,
+
     `\n── NARRATIVA ──`,
     `Párrafos cortos (3-4 oraciones). Oraciones directas. Lenguaje accesible; 3-6 párrafos por respuesta.`,
     `Termina siempre con situación abierta que invite a actuar. No decidas por los jugadores. Responde en español.`,
@@ -163,6 +167,45 @@ function parseLevelUps(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { text, updates };
+}
+
+interface ItemGrantResult {
+  character_id: string;
+  character_name: string;
+  item: string;
+  description: string;
+}
+
+function parseItemGrants(
+  content: string,
+  characters: Character[],
+): { text: string; grants: ItemGrantResult[] } {
+  const grants: ItemGrantResult[] = [];
+  const text = content
+    .replace(/ITEM_GRANT:\s*\{[^}]+\}/g, (match) => {
+      try {
+        const json = JSON.parse(match.slice("ITEM_GRANT:".length).trim()) as {
+          personaje: string;
+          item: string;
+          descripcion?: string;
+        };
+        const char = characters.find(
+          (c) => c.name.toLowerCase() === json.personaje.toLowerCase(),
+        );
+        if (char && json.item?.trim()) {
+          grants.push({
+            character_id: char.id,
+            character_name: char.name,
+            item: json.item.trim(),
+            description: (json.descripcion ?? "").trim(),
+          });
+        }
+      } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, grants };
 }
 
 function flattenMessage(row: Record<string, unknown>) {
@@ -314,12 +357,15 @@ export async function POST(
   // ── DM intro mode ────────────────────────────────────────────
   if (dm_intro) {
     // Idempotency: refuse if messages already exist.
-    const { count } = await admin
+    // .limit(1) is far faster than count:"exact" on large tables.
+    const { data: existing } = await admin
       .from("campaign_messages")
-      .select("*", { count: "exact", head: true })
-      .eq("campaign_id", campaignId);
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .limit(1)
+      .maybeSingle();
 
-    if ((count ?? 0) > 0) {
+    if (existing) {
       return NextResponse.json(
         { error: "La aventura ya tiene mensajes." },
         { status: 409 },
@@ -511,9 +557,10 @@ export async function POST(
     );
   }
 
-  // Parse HP_UPDATE and LEVEL_UP markers, strip them, update characters in DB
-  const { text: afterHp, updates: hpUpdates } = parseHpUpdates(dmContent, characters);
-  const { text: cleanDmContent, updates: levelUpdates } = parseLevelUps(afterHp, characters);
+  // Parse HP_UPDATE, LEVEL_UP, ITEM_GRANT markers — strip them, update DB
+  const { text: afterHp, updates: hpUpdates }         = parseHpUpdates(dmContent, characters);
+  const { text: afterLevel, updates: levelUpdates }    = parseLevelUps(afterHp, characters);
+  const { text: cleanDmContent, grants: itemGrants }   = parseItemGrants(afterLevel, characters);
 
   const dbUpdates = [
     ...hpUpdates.map(({ character_id, hp }) =>
@@ -522,6 +569,13 @@ export async function POST(
     ...levelUpdates.map(({ character_id, level }) =>
       admin.from("characters").update({ level }).eq("id", character_id),
     ),
+    // For each item grant, append to the character's existing items array
+    ...itemGrants.map(({ character_id, item, description }) => {
+      const char = characters.find((c) => c.id === character_id);
+      const current = (char?.items ?? []) as Array<{ name: string; description: string }>;
+      const updated = [...current, { name: item, description }];
+      return admin.from("characters").update({ items: updated }).eq("id", character_id);
+    }),
   ];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (dbUpdates.length > 0) await Promise.all(dbUpdates as any[]);
@@ -549,6 +603,7 @@ export async function POST(
     character_name: null,
     hp_updates: hpUpdates,
     level_updates: levelUpdates,
+    item_grants: itemGrants,
   };
   broadcastToChannel(`play:${campaignId}`, "dm_response", dmResponsePayload);
 
@@ -558,6 +613,7 @@ export async function POST(
       dm_response: dmResponsePayload,
       hp_updates: hpUpdates,
       level_updates: levelUpdates,
+      item_grants: itemGrants,
     },
     { status: 201 },
   );
