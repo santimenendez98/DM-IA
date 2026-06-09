@@ -1,5 +1,16 @@
 import { createClient } from "@/lib/supabase/client";
 
+export async function signInWithGoogle(): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function signUp(
   email: string,
   password: string,

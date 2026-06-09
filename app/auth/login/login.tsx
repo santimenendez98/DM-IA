@@ -1,9 +1,13 @@
 "use client";
 
-import { signIn } from "@/lib/auth";
+import { signIn, signInWithGoogle } from "@/lib/auth";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { langStore } from "@/lib/lang";
 import { loader } from "@/lib/loader";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
+import { LangSwitcher } from "@/components/LangSwitcher";
 
 import s from "./login.module.css";
 import { LoginErrors } from "@/types/login";
@@ -23,21 +27,29 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<LoginErrors>({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [errors, setErrors] = useState<LoginErrors>(() => {
+    if (typeof window === "undefined") return {};
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") !== "oauth") return {};
+    return { general: t[langStore.get()].login.err.oauthFailed };
+  });
   const [shake, setShake] = useState(false);
   const router = useRouter();
+  const { lang } = useLang();
+  const tr = t[lang].login;
 
   useEffect(() => { loader.stop(); }, []);
 
   function validate(): LoginErrors {
     const errs: LoginErrors = {};
     if (!email.trim()) {
-      errs.email = "El email no puede estar vacío.";
+      errs.email = tr.err.emailEmpty;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = "El email ingresado no es válido.";
+      errs.email = tr.err.emailInvalid;
     }
     if (!password) {
-      errs.password = "La contraseña es obligatoria.";
+      errs.password = tr.err.passwordEmpty;
     }
     return errs;
   }
@@ -49,20 +61,14 @@ export default function Login() {
 
   function mapAuthError(message: string): string {
     const lower = message.toLowerCase();
-    console.log(lower);
-    if (lower.includes("invalid email or password")) {
-      return "Email o contraseña incorrectos.";
-    }
-    if (lower.includes("email not confirmed")) {
-      return "Tu email no ha sido verificado. Revisa tu correo.";
-    }
-    if (lower.includes("too many requests") || lower.includes("rate limit")) {
-      return "Demasiados intentos fallidos. Vuelve a intentarlo más tarde.";
-    }
-    if (lower.includes("user not found") || lower.includes("no user")) {
-      return "Ningún usuario registrado con ese email.";
-    }
-    return "El oráculo no responde. Inténtalo de nuevo más tarde.";
+    if (lower.includes("invalid email or password"))
+      return tr.err.invalidCredentials;
+    if (lower.includes("email not confirmed")) return tr.err.emailNotConfirmed;
+    if (lower.includes("too many requests") || lower.includes("rate limit"))
+      return tr.err.tooManyRequests;
+    if (lower.includes("user not found") || lower.includes("no user"))
+      return tr.err.userNotFound;
+    return tr.err.generic;
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -120,13 +126,16 @@ export default function Login() {
 
         <div className={s.borderTop} />
 
+        {/* Language selector — top-right corner of card */}
+        <div style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
+          <LangSwitcher />
+        </div>
+
         <div className={s.cardBody}>
           <div className={s.emblem}>
             <D20Icon />
             <div className={s.title}>Hearth &amp; Hall</div>
-            <div className={s.subtitle}>
-              Portón de Aventuras — Identifica tu Alma
-            </div>
+            <div className={s.subtitle}>{tr.subtitle}</div>
           </div>
 
           <OrnamentDivider margin="22px 0" />
@@ -170,7 +179,7 @@ export default function Login() {
                     fill="#c9a030"
                   />
                 </svg>
-                Email
+                {tr.emailLabel}
               </label>
               <input
                 id="dnd-email"
@@ -218,7 +227,7 @@ export default function Login() {
                   />
                   <circle cx="8" cy="11" r="1.2" fill="#c9a030" />
                 </svg>
-                Contraseña
+                {tr.passwordLabel}
               </label>
               <input
                 id="dnd-password"
@@ -233,7 +242,7 @@ export default function Login() {
                     general: undefined,
                   }));
                 }}
-                placeholder="Introduce tu contraseña"
+                placeholder={tr.passwordPlaceholder}
                 autoComplete="current-password"
               />
               {errors.password && (
@@ -246,22 +255,29 @@ export default function Login() {
             </div>
 
             <button className={s.btnPrimary} type="submit" disabled={loading}>
-              {loading ? "⚡  Conjurando acceso..." : "⚔  Cruzar el Umbral"}
+              {loading ? tr.loading : tr.button}
             </button>
 
             <button
               type="button"
               className={s.btnSecondary}
-              onClick={() =>
-                alert("Inicio de sesión social aún no implementado")
-              }
+              disabled={googleLoading || loading}
+              onClick={async () => {
+                setGoogleLoading(true);
+                try {
+                  await signInWithGoogle();
+                } catch {
+                  setErrors({ general: tr.err.oauthFailed });
+                  setGoogleLoading(false);
+                }
+              }}
             >
-              ✦ Entrar con Pergamino Mágico
+              {googleLoading ? "..." : tr.socialButton}
             </button>
           </form>
 
           <div className={s.footer}>
-            ¿Sin cuenta en el gremio?{" "}
+            {tr.noAccount}{" "}
             <a
               className={s.footerLink}
               role="button"
@@ -271,13 +287,11 @@ export default function Login() {
                 e.key === "Enter" && router.push("/auth/signup")
               }
             >
-              Inscríbete como aventurero
+              {tr.signupLink}
             </a>
           </div>
 
-          <div className={s.quote}>
-            &ldquo;No todo el que vaga está perdido.&rdquo;
-          </div>
+          <div className={s.quote}>&ldquo;{tr.quote}&rdquo;</div>
         </div>
 
         <div className={s.borderBottom} />

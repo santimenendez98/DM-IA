@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
+import { langStore } from "@/lib/lang";
 import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
@@ -1053,7 +1054,7 @@ export default function Play() {
           const introRes = await fetch(`/api/campaigns/${camp.id}/messages`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dm_intro: true }),
+            body: JSON.stringify({ dm_intro: true, lang: langStore.get() }),
             signal,
           });
           if (signal.aborted) return;
@@ -1413,7 +1414,7 @@ export default function Play() {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character_id: activeCharId, content, invoke_dm: withDm }),
+        body: JSON.stringify({ character_id: activeCharId, content, invoke_dm: withDm, lang: langStore.get() }),
       });
 
       if (!res.ok) {

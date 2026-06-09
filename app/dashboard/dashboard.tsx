@@ -10,6 +10,8 @@ import NotificationsBell from "@/components/NotificationsBell";
 import type { Campaign } from "@/types/campaing";
 import type { Character } from "@/types/character";
 import type { JoinRequest } from "@/types/join-request";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 
 interface JoinedCampaign {
   id: string;
@@ -22,6 +24,7 @@ interface JoinedCampaign {
 import { cx } from "@/components/cx";
 import GuildExplorer from "./guild-explorer";
 import JoinByCode from "./join-by-code";
+import { LangSwitcher } from "@/components/LangSwitcher";
 import s from "./dashboard.module.css";
 
 // ── Label maps ─────────────────────────────────────────────────
@@ -34,171 +37,13 @@ const SETTING_BADGE: Record<string, string | undefined> = {
   "custom":    s.badge_custom,
 };
 
-const SETTING_LABELS: Record<string, string> = {
-  "fantasy":   "Fantasía",
-  "sci-fi":    "Ciencia Ficción",
-  "horror":    "Horror",
-  "cyberpunk": "Cyberpunk",
-  "custom":    "Personalizado",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  "epic":      "Épico",
-  "dark":      "Oscuro",
-  "comedic":   "Cómico",
-  "gritty":    "Crudo",
-  "whimsical": "Caprichoso",
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 }
-
-// ── Stat card data ─────────────────────────────────────────────
-
-const STATS: Array<{ label: string; comingSoon?: boolean; icon: React.ReactNode }> = [
-  {
-    label: "Campañas Activas",
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <line x1="14" y1="4" x2="14" y2="24" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
-        <line x1="6"  y1="4" x2="6"  y2="18" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
-        <line x1="22" y1="4" x2="22" y2="18" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
-        <path d="M6 4 L14 8 L22 4" stroke="#e8c040" strokeWidth="1.5" fill="none" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Personajes Forjados",
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <circle cx="14" cy="9" r="4" fill="none" stroke="#b8860b" strokeWidth="1.8" />
-        <path d="M5 24c0-5 4-9 9-9s9 4 9 9" stroke="#b8860b" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-        <circle cx="14" cy="9" r="1.5" fill="#e8c040" />
-      </svg>
-    ),
-  },
-  {
-    label: "Sesiones Jugadas",
-    comingSoon: true,
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <polygon
-          points="14,3 18,10 25,10 19,15 22,22 14,17 6,22 9,15 3,10 10,10"
-          fill="none"
-          stroke="#b8860b"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-        <circle cx="14" cy="13" r="2" fill="#e8c040" />
-      </svg>
-    ),
-  },
-  {
-    label: "Logros Desbloqueados",
-    comingSoon: true,
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-        <path
-          d="M14 4 L18 10 L24 11 L19 16 L20 22 L14 19 L8 22 L9 16 L4 11 L10 10 Z"
-          fill="none"
-          stroke="#b8860b"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M10 13 L13 16 L18 11"
-          stroke="#e8c040"
-          strokeWidth="1.8"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-];
-
-// ── Quick actions ──────────────────────────────────────────────
-
-const ACTIONS: Array<{ title: string; sub: string; href: string | null; comingSoon?: boolean; icon: React.ReactNode }> = [
-  {
-    title: "Nueva Campaña",
-    sub: "Traza el inicio de una nueva aventura",
-    href: "/campaigns/new",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <line x1="9" y1="2" x2="9" y2="16" stroke="#b8860b" strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="2" y1="9" x2="16" y2="9" stroke="#b8860b" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    title: "Crear Personaje",
-    sub: "Forja un nuevo héroe o villano",
-    href: "/characters/new",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <circle cx="9" cy="6" r="3" fill="none" stroke="#b8860b" strokeWidth="1.6" />
-        <path d="M3 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#b8860b" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    title: "Explorar el Gremio",
-    sub: "Busca aventureros y campañas públicas",
-    href: null,
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <circle cx="8" cy="8" r="5" fill="none" stroke="#b8860b" strokeWidth="1.6" />
-        <line x1="12" y1="12" x2="16" y2="16" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    title: "Unirse con Código",
-    sub: "Ingresa a una campaña con código de sala",
-    href: null,
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <rect x="3" y="8" width="12" height="9" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
-        <path d="M6 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
-        <circle cx="9" cy="12.5" r="1.4" fill="#e8c040" />
-      </svg>
-    ),
-  },
-  {
-    title: "Ver Historial",
-    sub: "Revive las crónicas de tus partidas",
-    href: null,
-    comingSoon: true,
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <rect x="3" y="2" width="12" height="14" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
-        <line x1="6" y1="6"  x2="12" y2="6"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="6" y1="9"  x2="12" y2="9"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="6" y1="12" x2="10" y2="12" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    title: "Mensajes",
-    sub: "Coordina con tu grupo fuera de la partida",
-    href: "/messages",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-        <rect x="2" y="3" width="14" height="10" rx="2" fill="none" stroke="#b8860b" strokeWidth="1.6" />
-        <path d="M5 13l-1.5 2.5" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="5" y1="7"  x2="13" y2="7"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="5" y1="10" x2="10" y2="10" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-];
 
 // ── Component ──────────────────────────────────────────────────
 
@@ -217,6 +62,157 @@ export default function Dashboard() {
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
   const [leavingId, setLeavingId]     = useState<string | null>(null);
   const router = useRouter();
+  const { lang } = useLang();
+  const tr = t[lang].dashboard;
+  const locale = lang === "en" ? "en-US" : lang === "pt" ? "pt-BR" : "es-ES";
+
+  const STATS: Array<{ key: string; label: string; comingSoon?: boolean; icon: React.ReactNode }> = [
+    {
+      key: "campaigns",
+      label: tr.statCampaigns,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+          <line x1="14" y1="4" x2="14" y2="24" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
+          <line x1="6"  y1="4" x2="6"  y2="18" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
+          <line x1="22" y1="4" x2="22" y2="18" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
+          <path d="M6 4 L14 8 L22 4" stroke="#e8c040" strokeWidth="1.5" fill="none" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      key: "characters",
+      label: tr.statCharacters,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+          <circle cx="14" cy="9" r="4" fill="none" stroke="#b8860b" strokeWidth="1.8" />
+          <path d="M5 24c0-5 4-9 9-9s9 4 9 9" stroke="#b8860b" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <circle cx="14" cy="9" r="1.5" fill="#e8c040" />
+        </svg>
+      ),
+    },
+    {
+      key: "sessions",
+      label: tr.statSessions,
+      comingSoon: true,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+          <polygon
+            points="14,3 18,10 25,10 19,15 22,22 14,17 6,22 9,15 3,10 10,10"
+            fill="none"
+            stroke="#b8860b"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <circle cx="14" cy="13" r="2" fill="#e8c040" />
+        </svg>
+      ),
+    },
+    {
+      key: "achievements",
+      label: tr.statAchievements,
+      comingSoon: true,
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+          <path
+            d="M14 4 L18 10 L24 11 L19 16 L20 22 L14 19 L8 22 L9 16 L4 11 L10 10 Z"
+            fill="none"
+            stroke="#b8860b"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M10 13 L13 16 L18 11"
+            stroke="#e8c040"
+            strokeWidth="1.8"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+    },
+  ];
+
+  const ACTIONS: Array<{ id: string; title: string; sub: string; href: string | null; comingSoon?: boolean; icon: React.ReactNode }> = [
+    {
+      id: "new-campaign",
+      title: tr.actionNewCampaign,
+      sub: tr.actionNewCampaignSub,
+      href: "/campaigns/new",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <line x1="9" y1="2" x2="9" y2="16" stroke="#b8860b" strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="2" y1="9" x2="16" y2="9" stroke="#b8860b" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "new-character",
+      title: tr.actionNewCharacter,
+      sub: tr.actionNewCharacterSub,
+      href: "/characters/new",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <circle cx="9" cy="6" r="3" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+          <path d="M3 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#b8860b" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "guild",
+      title: tr.actionGuild,
+      sub: tr.actionGuildSub,
+      href: null,
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <circle cx="8" cy="8" r="5" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+          <line x1="12" y1="12" x2="16" y2="16" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "join-code",
+      title: tr.actionJoinCode,
+      sub: tr.actionJoinCodeSub,
+      href: null,
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <rect x="3" y="8" width="12" height="9" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+          <path d="M6 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="9" cy="12.5" r="1.4" fill="#e8c040" />
+        </svg>
+      ),
+    },
+    {
+      id: "history",
+      title: tr.actionHistory,
+      sub: tr.actionHistorySub,
+      href: null,
+      comingSoon: true,
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <rect x="3" y="2" width="12" height="14" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+          <line x1="6" y1="6"  x2="12" y2="6"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="6" y1="9"  x2="12" y2="9"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="6" y1="12" x2="10" y2="12" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "messages",
+      title: tr.actionMessages,
+      sub: tr.actionMessagesSub,
+      href: "/messages",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          <rect x="2" y="3" width="14" height="10" rx="2" fill="none" stroke="#b8860b" strokeWidth="1.6" />
+          <path d="M5 13l-1.5 2.5" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+          <line x1="5" y1="7"  x2="13" y2="7"  stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="5" y1="10" x2="10" y2="10" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+  ];
 
   useEffect(() => {
     getCurrUser().then(async (u) => {
@@ -338,6 +334,7 @@ export default function Dashboard() {
                 <span className={s.userName}>{displayName}</span>
               </div>
             )}
+            <LangSwitcher />
             {user && <NotificationsBell userId={user.id} />}
             <button className={s.btnLogout} onClick={handleLogout} disabled={loggingOut}>
               <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
@@ -345,7 +342,7 @@ export default function Dashboard() {
                 <path d="M8 4l2 2-2 2" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                 <line x1="10" y1="6" x2="5" y2="6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              {loggingOut ? "Saliendo..." : "Abandonar Taberna"}
+              {loggingOut ? tr.loggingOut : tr.logout}
             </button>
           </div>
         </header>
@@ -361,8 +358,8 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <div className={s.welcomeGreeting}>Bienvenido, {displayName}</div>
-                <div className={s.welcomeSub}>El salón te aguarda. ¿Qué aventura escribirás hoy?</div>
+                <div className={s.welcomeGreeting}>{tr.welcome}, {displayName}</div>
+                <div className={s.welcomeSub}>{tr.welcomeSub}</div>
               </>
             )}
             <div className={s.welcomeScrollBottom} />
@@ -374,15 +371,15 @@ export default function Dashboard() {
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
             <polygon points="7,1 8.5,5 13,5 9.5,7.5 11,12 7,9.5 3,12 4.5,7.5 1,5 5.5,5" fill="#c9a030" />
           </svg>
-          Crónicas del Aventurero
+          {tr.sectionStats}
         </div>
 
         <div className={s.statsGrid}>
           {STATS.map((stat, i) => (
-            <div key={stat.label} className={cx(s.statCard, stat.comingSoon && s.statCardDimmed)}>
+            <div key={stat.key} className={cx(s.statCard, stat.comingSoon && s.statCardDimmed)}>
               <div className={s.statIcon}>{stat.icon}</div>
               {stat.comingSoon ? (
-                <div className={s.statComingSoon}>Próximamente</div>
+                <div className={s.statComingSoon}>{tr.comingSoon}</div>
               ) : (
                 <div className={s.statValue}>{loading ? "—" : statValues[i]}</div>
               )}
@@ -397,27 +394,27 @@ export default function Dashboard() {
             <path d="M2 7 L7 2 L12 7 L7 12 Z" fill="none" stroke="#c9a030" strokeWidth="1.4" />
             <circle cx="7" cy="7" r="1.5" fill="#c9a030" />
           </svg>
-          Acciones Rápidas
+          {tr.sectionActions}
         </div>
 
         <div className={s.actionsGrid}>
           {ACTIONS.map((action) => (
             <button
-              key={action.title}
+              key={action.id}
               className={cx(s.actionCard, action.comingSoon && s.actionCardDimmed)}
               disabled={action.comingSoon}
               onClick={() => {
                 if (action.comingSoon) return;
                 if (action.href) { router.push(action.href); return; }
-                if (action.title === "Explorar el Gremio")  { setGuildOpen(true); return; }
-                if (action.title === "Unirse con Código")   { setJoinCodeOpen(true); return; }
+                if (action.id === "guild")     { setGuildOpen(true); return; }
+                if (action.id === "join-code") { setJoinCodeOpen(true); return; }
               }}
             >
               <div className={s.actionCardIcon}>{action.icon}</div>
               <div className={s.actionCardText}>
                 <span className={s.actionCardTitle}>
                   {action.title}
-                  {action.comingSoon && <span className={s.soonBadge}>Próximamente</span>}
+                  {action.comingSoon && <span className={s.soonBadge}>{tr.comingSoon}</span>}
                 </span>
                 <span className={s.actionCardSub}>{action.sub}</span>
               </div>
@@ -433,7 +430,7 @@ export default function Dashboard() {
             <line x1="11" y1="1" x2="11" y2="9" stroke="#c9a030" strokeWidth="1.4" strokeLinecap="round" />
             <path d="M3 1 L7 3 L11 1" stroke="#c9a030" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
           </svg>
-          Mis Campañas
+          {tr.sectionMyCampaigns}
         </div>
 
         {loading ? (
@@ -450,9 +447,9 @@ export default function Dashboard() {
               <line x1="12" y1="16" x2="20" y2="16" stroke="#4a3510" strokeWidth="1.2" strokeLinecap="round" />
               <line x1="12" y1="20" x2="17" y2="20" stroke="#4a3510" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
-            <p>Los pergaminos están en blanco. Crea tu primera campaña para comenzar la leyenda.</p>
+            <p>{tr.campaignEmpty}</p>
             <button className={s.btnNewCampaign} onClick={() => router.push("/campaigns/new")}>
-              ✦ Nueva Campaña
+              {tr.btnNewCampaign}
             </button>
           </div>
         ) : (
@@ -475,7 +472,7 @@ export default function Dashboard() {
                       {pendingCount > 0 && (
                         <span
                           className={s.requestBadge}
-                          title={`${pendingCount} solicitud${pendingCount > 1 ? "es" : ""} pendiente${pendingCount > 1 ? "s" : ""}`}
+                          title={`${pendingCount}`}
                         >
                           {pendingCount}
                         </span>
@@ -483,21 +480,21 @@ export default function Dashboard() {
                     </div>
                     <div className={s.campaignMeta}>
                       <span className={cx(s.badge, SETTING_BADGE[c.setting])}>
-                        {SETTING_LABELS[c.setting] ?? c.setting}
+                        {tr.settings[c.setting as keyof typeof tr.settings] ?? c.setting}
                       </span>
-                      <span className={s.badge}>{TONE_LABELS[c.tone] ?? c.tone}</span>
+                      <span className={s.badge}>{tr.tones[c.tone as keyof typeof tr.tones] ?? c.tone}</span>
                       <span className={cx(s.badge, isStarted ? s.badgeActive : s.badgePending)}>
-                        {isStarted ? "En Curso" : "Sin Comenzar"}
+                        {isStarted ? tr.statusInProgress : tr.statusNotStarted}
                       </span>
                     </div>
-                    <div className={s.campaignDate}>{formatDate(c.created_at)}</div>
+                    <div className={s.campaignDate}>{formatDate(c.created_at, locale)}</div>
                   </div>
                   <div className={s.campaignCardActions}>
                     <button
                       className={s.btnPlay}
                       onClick={(e) => { e.stopPropagation(); loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
                     >
-                      Entrar →
+                      {tr.btnEnter}
                     </button>
                     <button
                       className={s.btnManage}
@@ -519,7 +516,7 @@ export default function Dashboard() {
                         onClick={(e) => { e.stopPropagation(); deleteCampaign(c.id); }}
                         disabled={isDeleting}
                       >
-                        {isDeleting ? "···" : "¿Eliminar?"}
+                        {isDeleting ? "···" : tr.btnDeleteConfirm}
                       </button>
                     ) : (
                       <button
@@ -550,7 +547,7 @@ export default function Dashboard() {
                 <line x1="10" y1="2" x2="10" y2="6" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
                 <line x1="8" y1="4" x2="12" y2="4" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
               </svg>
-              Campañas como Jugador
+              {tr.sectionJoinedCampaigns}
             </div>
 
             {loading ? (
@@ -576,18 +573,18 @@ export default function Dashboard() {
                         <div className={s.campaignName}>{c.name}</div>
                         <div className={s.campaignMeta}>
                           <span className={cx(s.badge, SETTING_BADGE[c.setting])}>
-                            {SETTING_LABELS[c.setting] ?? c.setting}
+                            {tr.settings[c.setting as keyof typeof tr.settings] ?? c.setting}
                           </span>
-                          <span className={s.badge}>{TONE_LABELS[c.tone] ?? c.tone}</span>
+                          <span className={s.badge}>{tr.tones[c.tone as keyof typeof tr.tones] ?? c.tone}</span>
                           <span className={cx(s.badge, isStarted ? s.badgeActive : s.badgePending)}>
-                            {isStarted ? "En Curso" : "Sin Comenzar"}
+                            {isStarted ? tr.statusInProgress : tr.statusNotStarted}
                           </span>
                         </div>
                         {c.my_characters.length > 0 && (
                           <div className={s.joinedChars}>
                             {c.my_characters.map((ch) => (
                               <span key={ch.id} className={s.joinedCharBadge}>
-                                {ch.name} · {ch.class} Nv.{ch.level}
+                                {ch.name} · {ch.class} {tr.levelAbbr}{ch.level}
                               </span>
                             ))}
                           </div>
@@ -598,7 +595,7 @@ export default function Dashboard() {
                           className={s.btnPlay}
                           onClick={(e) => { e.stopPropagation(); loader.start(); router.push(`/campaigns/${c.id}/lobby`); }}
                         >
-                          Entrar →
+                          {tr.btnEnter}
                         </button>
                         {isConfirming ? (
                           <button
@@ -606,7 +603,7 @@ export default function Dashboard() {
                             onClick={(e) => { e.stopPropagation(); leaveCampaign(c.id); }}
                             disabled={isLeaving}
                           >
-                            {isLeaving ? "···" : "¿Salir?"}
+                            {isLeaving ? "···" : tr.btnLeaveConfirm}
                           </button>
                         ) : (
                           <button
@@ -637,7 +634,7 @@ export default function Dashboard() {
             <circle cx="7" cy="4.5" r="2.5" fill="none" stroke="#c9a030" strokeWidth="1.4" />
             <path d="M1 13c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="none" stroke="#c9a030" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
-          Mis Personajes
+          {tr.sectionCharacters}
         </div>
 
         {loading ? (
@@ -652,9 +649,9 @@ export default function Dashboard() {
               <circle cx="16" cy="11" r="5" fill="none" stroke="#4a3510" strokeWidth="1.6" />
               <path d="M5 29c0-6 4.9-11 11-11s11 4.9 11 11" fill="none" stroke="#4a3510" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
-            <p>El libro de héroes está vacío. Forja tu primer personaje para comenzar la leyenda.</p>
+            <p>{tr.characterEmpty}</p>
             <button className={s.btnNewCampaign} onClick={() => router.push("/characters/new")}>
-              ✦ Crear Personaje
+              {tr.btnNewCharacter}
             </button>
           </div>
         ) : (
@@ -676,7 +673,7 @@ export default function Dashboard() {
                     <div className={s.campaignName}>{c.name}</div>
                     <div className={s.campaignMeta}>
                       <span className={s.badge}>{c.class}</span>
-                      <span className={s.badge}>Nv. {c.level}</span>
+                      <span className={s.badge}>{tr.levelAbbr} {c.level}</span>
                     </div>
                     <div className={s.charHpRow}>
                       <div className={s.charHpBar}>
@@ -689,7 +686,7 @@ export default function Dashboard() {
                     className={s.btnPlay}
                     onClick={() => router.push(`/characters/${c.id}`)}
                   >
-                    Ver →
+                    {tr.btnView}
                   </button>
                 </div>
               );
@@ -704,19 +701,19 @@ export default function Dashboard() {
             <line x1="7" y1="4"   x2="7"   y2="7.5" stroke="#c9a030" strokeWidth="1.4" strokeLinecap="round" />
             <line x1="7" y1="7.5" x2="9.5" y2="9"   stroke="#c9a030" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
-          Actividad Reciente
+          {tr.sectionActivity}
         </div>
 
         {(() => {
           const activity = [
             ...campaigns.map((c) => ({
               key: `camp-${c.id}`,
-              text: `Campaña "${c.name}" creada`,
+              text: tr.activityCampaignFmt.replace("{n}", c.name),
               created_at: c.created_at,
             })),
             ...characters.map((c) => ({
               key: `char-${c.id}`,
-              text: `Personaje "${c.name}" (${c.class}) forjado`,
+              text: tr.activityCharacterFmt.replace("{n}", c.name).replace("{c}", c.class),
               created_at: c.created_at,
             })),
           ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -728,14 +725,10 @@ export default function Dashboard() {
                 ? activity.map((item) => (
                     <div key={item.key} className={s.activityItem}>
                       <div className={s.activityDot} style={{ background: "#7a5c1e" }} />
-                      {item.text} el {formatDate(item.created_at)}.
+                      {item.text} {tr.activityOn} {formatDate(item.created_at, locale)}.
                     </div>
                   ))
-                : [
-                    "Tu leyenda aún no ha comenzado. Crea una campaña o un personaje para escribir la historia.",
-                    "Los pergaminos están en blanco. El destino aguarda tu primera acción.",
-                    "El oráculo no registra actividad reciente. Pronto cambiará.",
-                  ].map((msg, i) => (
+                : [tr.activityEmpty1, tr.activityEmpty2, tr.activityEmpty3].map((msg, i) => (
                     <div key={i} className={s.activityItem}>
                       <div className={s.activityDot} />
                       {msg}
