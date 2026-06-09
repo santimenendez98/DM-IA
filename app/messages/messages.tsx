@@ -74,35 +74,43 @@ export default function Messages() {
 
   // ── Load user + campaigns + previews ──────────────────────────
   useEffect(() => {
-    getCurrUser().then((u) => {
-      if (!u) { router.replace("/auth/login"); return; }
-      setCurrentUserId(u.id);
-    });
+    let cancelled = false;
 
-    Promise.all([
-      fetch("/api/campaigns").then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/campaigns/joined").then((r) => (r.ok ? r.json() : [])),
-    ]).then(([owned, joined]: [Campaign[], Campaign[]]) => {
-      const seen = new Set<string>();
-      const all: Campaign[] = [];
-      for (const c of [...owned, ...joined]) {
-        if (!seen.has(c.id)) { seen.add(c.id); all.push(c); }
-      }
-      setCampaigns(all);
-      if (all.length > 0) {
-        const preferred = campaignParam && all.find((c) => c.id === campaignParam);
-        setSelectedId(preferred ? campaignParam : all[0].id);
-      }
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    // Auth and all data fetches run in parallel
+    const authP     = getCurrUser();
+    const ownedP    = fetch("/api/campaigns").then((r) => (r.ok ? r.json() : []));
+    const joinedP   = fetch("/api/campaigns/joined").then((r) => (r.ok ? r.json() : []));
+    const previewsP = fetch("/api/campaigns/chat/previews").then((r) => (r.ok ? r.json() : []));
 
-    // Load sidebar previews (last message per campaign)
-    fetch("/api/campaigns/chat/previews")
-      .then((r) => (r.ok ? r.json() : []))
+    Promise.all([authP, ownedP, joinedP]).then(
+      ([u, owned, joined]: [Awaited<ReturnType<typeof getCurrUser>>, Campaign[], Campaign[]]) => {
+        if (cancelled) return;
+        if (!u) { router.replace("/auth/login"); return; }
+        setCurrentUserId(u.id);
+
+        const seen = new Set<string>();
+        const all: Campaign[] = [];
+        for (const c of [...owned, ...joined]) {
+          if (!seen.has(c.id)) { seen.add(c.id); all.push(c); }
+        }
+        setCampaigns(all);
+        if (all.length > 0) {
+          const preferred = campaignParam && all.find((c) => c.id === campaignParam);
+          setSelectedId(preferred ? campaignParam : all[0].id);
+        }
+        setLoading(false);
+        loader.stop();
+      },
+    ).catch(() => { if (!cancelled) { setLoading(false); loader.stop(); } });
+
+    previewsP
       .then((data: Array<{ campaign_id: string; content: string; username: string }>) => {
+        if (cancelled) return;
         setPreviews(new Map(data.map((p) => [p.campaign_id, { content: p.content, username: p.username }])));
       })
       .catch(() => {});
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 

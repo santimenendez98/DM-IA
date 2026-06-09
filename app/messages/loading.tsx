@@ -1,7 +1,4 @@
-import { Suspense } from "react";
-import Messages from "./messages";
-
-function MessagesSkeleton() {
+export default function Loading() {
   return (
     <div style={{
       height: "100vh",
@@ -9,7 +6,15 @@ function MessagesSkeleton() {
       display: "flex",
       overflow: "hidden",
     }}>
-      <aside style={{ width: 260, borderRight: "1px solid #1e1406", padding: "12px 10px", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+      <aside style={{
+        width: 260,
+        flexShrink: 0,
+        borderRight: "1px solid #1e1406",
+        padding: "12px 10px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}>
         <div style={{ height: 20, width: 80, borderRadius: 3, background: "#1a1006", marginBottom: 8 }} />
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} style={{ height: 54, borderRadius: 3, background: "#1a1006" }} />
@@ -17,13 +22,5 @@ function MessagesSkeleton() {
       </aside>
       <main style={{ flex: 1 }} />
     </div>
-  );
-}
-
-export default function MessagesPage() {
-  return (
-    <Suspense fallback={<MessagesSkeleton />}>
-      <Messages />
-    </Suspense>
   );
 }

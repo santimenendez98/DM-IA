@@ -74,46 +74,46 @@ export default function CampaignDetailPage() {
   const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getCurrUser().then(async (u) => {
-      if (!u) {
-        router.replace("/auth/login");
-        return;
-      }
+    let cancelled = false;
 
-      const [campRes, charsRes, allCampsRes, reqsRes] = await Promise.all([
-        fetch(`/api/campaigns/${id}`),
-        fetch("/api/characters"),
-        fetch("/api/campaigns"),
-        fetch(`/api/campaigns/${id}/requests`),
-      ]);
+    // All requests start in parallel — auth does not block data fetches.
+    const authP       = getCurrUser();
+    const campP       = fetch(`/api/campaigns/${id}`);
+    const charsP      = fetch("/api/characters");
+    const allCampsP   = fetch("/api/campaigns");
+    const reqsP       = fetch(`/api/campaigns/${id}/requests`);
+
+    async function load() {
+      // Wait for auth and the critical campaign fetch together.
+      const [u, campRes] = await Promise.all([authP, campP]);
+
+      if (!u) { router.replace("/auth/login"); return; }
 
       if (!campRes.ok) {
-        loader.stop();
-        setNotFound(true);
-        setLoading(false);
+        if (!cancelled) { loader.stop(); setNotFound(true); setLoading(false); }
         return;
       }
 
-      const [camp, chars, camps, reqs] = await Promise.all([
-        campRes.json() as Promise<CampaignDetail>,
-        charsRes.ok
-          ? (charsRes.json() as Promise<Character[]>)
-          : Promise.resolve([]),
-        allCampsRes.ok
-          ? (allCampsRes.json() as Promise<Campaign[]>)
-          : Promise.resolve([]),
-        reqsRes.ok
-          ? (reqsRes.json() as Promise<JoinRequest[]>)
-          : Promise.resolve([]),
-      ]);
+      const camp = await campRes.json() as CampaignDetail;
+      if (cancelled) return;
 
+      // Show campaign immediately — loader stops here so the page is visible.
       setCampaign(camp);
-      setAllChars(chars);
-      setAllCampaigns(camps);
-      setJoinRequests(reqs);
-      loader.stop();
       setLoading(false);
-    });
+      loader.stop();
+
+      // Secondary data is already in-flight; stream it in as it arrives.
+      const [charsRes, allCampsRes, reqsRes] = await Promise.all([charsP, allCampsP, reqsP]);
+      if (cancelled) return;
+
+      if (charsRes.ok)   setAllChars(await charsRes.json() as Character[]);
+      if (allCampsRes.ok) setAllCampaigns(await allCampsRes.json() as Campaign[]);
+      if (reqsRes.ok)    setJoinRequests(await reqsRes.json() as JoinRequest[]);
+    }
+
+    load().catch(() => { if (!cancelled) { loader.stop(); setLoading(false); } });
+
+    return () => { cancelled = true; };
   }, [id, router]);
 
   // Real-time subscription for join requests and party changes.

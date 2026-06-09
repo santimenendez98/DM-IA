@@ -1,9 +1,12 @@
 "use client";
 
-import { signUp } from "@/lib/auth";
+import { signUp, signInWithGoogle } from "@/lib/auth";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loader } from "@/lib/loader";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
+import { LangSwitcher } from "@/components/LangSwitcher";
 
 import s from "./signup.module.css";
 import { SignupErrors } from "@/types/signup";
@@ -13,15 +16,6 @@ import { OrnamentDivider } from "@/components/OrnamentDivider";
 import { FieldError } from "@/components/FieldError";
 
 type PasswordStrength = { level: 0 | 1 | 2 | 3; label: string; color: string };
-
-function passwordStrength(pw: string): PasswordStrength {
-  if (pw.length === 0) return { level: 0, label: "", color: "" };
-  if (pw.length < 6)
-    return { level: 1, label: "Conjuro Débil", color: "#b84040" };
-  if (pw.length < 10 || !/[0-9]/.test(pw))
-    return { level: 2, label: "Conjuro Aprendiz", color: "#b87820" };
-  return { level: 3, label: "Conjuro de Maestro", color: "#4a9a60" };
-}
 
 const CORNER_CLASS: Record<string, string> = {
   tl: s.cornerTl,
@@ -36,36 +30,36 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<SignupErrors>({});
   const [shake, setShake] = useState(false);
   const router = useRouter();
+  const { lang } = useLang();
+  const tr = t[lang].signup;
 
   useEffect(() => { loader.stop(); }, []);
+
+  function passwordStrength(pw: string): PasswordStrength {
+    if (pw.length === 0) return { level: 0, label: "", color: "" };
+    if (pw.length < 6)   return { level: 1, label: tr.strength.weak,   color: "#b84040" };
+    if (pw.length < 10 || !/[0-9]/.test(pw))
+                          return { level: 2, label: tr.strength.fair,   color: "#b87820" };
+    return               { level: 3, label: tr.strength.strong, color: "#4a9a60" };
+  }
 
   const strength = passwordStrength(password);
 
   function validate(): SignupErrors {
     const errs: SignupErrors = {};
-    if (!name.trim()) {
-      errs.name = "El nombre del héroe no puede estar vacío.";
-    } else if (name.trim().length < 2) {
-      errs.name = "Tu leyenda merece un nombre más largo.";
-    }
-    if (!email.trim()) {
-      errs.email = "El pergamino de contacto no puede estar vacío.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = "El formato del pergamino de contacto no es válido.";
-    }
-    if (!password) {
-      errs.password = "La palabra de poder es obligatoria.";
-    } else if (password.length < 6) {
-      errs.password = "La palabra de poder es demasiado débil para el hechizo.";
-    }
-    if (!confirm) {
-      errs.confirm = "Debes confirmar el encantamiento.";
-    } else if (password && confirm !== password) {
-      errs.confirm = "Los conjuros no coinciden. Repite la palabra de poder.";
-    }
+    if (!name.trim())               errs.name     = tr.err.nameEmpty;
+    else if (name.trim().length < 2) errs.name    = tr.err.nameTooShort;
+    if (!email.trim())               errs.email   = tr.err.emailEmpty;
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                                     errs.email   = tr.err.emailInvalid;
+    if (!password)                   errs.password = tr.err.passwordEmpty;
+    else if (password.length < 6)    errs.password = tr.err.passwordTooShort;
+    if (!confirm)                    errs.confirm  = tr.err.confirmEmpty;
+    else if (confirm !== password)   errs.confirm  = tr.err.confirmMismatch;
     return errs;
   }
 
@@ -76,23 +70,15 @@ export default function Signup() {
 
   function mapAuthError(message: string): string {
     const lower = message.toLowerCase();
-    if (
-      lower.includes("already registered") ||
-      lower.includes("already exists") ||
-      lower.includes("user already")
-    ) {
-      return "Ya existe un aventurero registrado con ese pergamino de contacto.";
-    }
-    if (lower.includes("weak password") || lower.includes("password should")) {
-      return "La palabra de poder es demasiado débil. Elige un conjuro más poderoso.";
-    }
-    if (lower.includes("invalid email")) {
-      return "El formato del pergamino de contacto no es válido.";
-    }
-    if (lower.includes("too many requests") || lower.includes("rate limit")) {
-      return "Demasiados intentos. El oráculo te pide descanso.";
-    }
-    return "El pacto no pudo sellarse. Inténtalo de nuevo más tarde.";
+    if (lower.includes("already registered") || lower.includes("already exists") || lower.includes("user already"))
+      return tr.err.emailExists;
+    if (lower.includes("weak password") || lower.includes("password should"))
+      return tr.err.weakPassword;
+    if (lower.includes("invalid email"))
+      return tr.err.emailInvalid;
+    if (lower.includes("too many requests") || lower.includes("rate limit"))
+      return tr.err.generic;
+    return tr.err.generic;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,9 +94,7 @@ export default function Signup() {
     try {
       const result = await signUp(email, password, name);
       if (!result.user) {
-        setErrors({
-          general: "El pacto no pudo sellarse. Inténtalo de nuevo.",
-        });
+        setErrors({ general: tr.err.failed });
         triggerShake();
         return;
       }
@@ -139,40 +123,23 @@ export default function Signup() {
             aria-hidden
           >
             <path d="M2 2 L14 2 L2 14 Z" fill="#3a6ab8" opacity="0.7" />
-            <path
-              d="M2 2 L22 2"
-              stroke="#3a6ab8"
-              strokeWidth="1.2"
-              fill="none"
-              opacity="0.5"
-            />
-            <path
-              d="M2 2 L2 22"
-              stroke="#3a6ab8"
-              strokeWidth="1.2"
-              fill="none"
-              opacity="0.5"
-            />
+            <path d="M2 2 L22 2" stroke="#3a6ab8" strokeWidth="1.2" fill="none" opacity="0.5" />
+            <path d="M2 2 L2 22" stroke="#3a6ab8" strokeWidth="1.2" fill="none" opacity="0.5" />
           </svg>
         ))}
 
         <div className={s.borderTop} />
 
+        {/* Language selector — top-right corner of card */}
+        <div style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
+          <LangSwitcher />
+        </div>
+
         <div className={s.cardBody}>
           <div className={s.emblem}>
             <ShieldIcon />
-            <div className={s.title}>Pacto del Gremio</div>
-            <div className={s.subtitle}>
-              Forja tu leyenda — Crea tu identidad de aventurero
-            </div>
-          </div>
-
-          <div className={s.classBadges}>
-            {["Guerrero", "Mago", "Pícaro", "Clérigo", "Druida"].map((c) => (
-              <span key={c} className={s.classBadge}>
-                {c}
-              </span>
-            ))}
+            <div className={s.title}>{tr.title}</div>
+            <div className={s.subtitle}>{tr.subtitle}</div>
           </div>
 
           <OrnamentDivider margin="20px 0" />
@@ -180,28 +147,9 @@ export default function Signup() {
           <form className={s.form} onSubmit={handleSubmit} noValidate>
             {errors.general && (
               <div className={s.errorBanner} role="alert">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  aria-hidden
-                  style={{ flexShrink: 0, marginTop: 1 }}
-                >
-                  <path
-                    d="M8 1L15 14H1Z"
-                    fill="none"
-                    stroke="#90b0f0"
-                    strokeWidth="1.5"
-                  />
-                  <line
-                    x1="8"
-                    y1="6"
-                    x2="8"
-                    y2="9.5"
-                    stroke="#90b0f0"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ flexShrink: 0, marginTop: 1 }}>
+                  <path d="M8 1L15 14H1Z" fill="none" stroke="#90b0f0" strokeWidth="1.5" />
+                  <line x1="8" y1="6" x2="8" y2="9.5" stroke="#90b0f0" strokeWidth="1.5" strokeLinecap="round" />
                   <circle cx="8" cy="11.5" r="0.9" fill="#90b0f0" />
                 </svg>
                 {errors.general}
@@ -211,121 +159,59 @@ export default function Signup() {
             <div className={s.field}>
               <label className={s.label} htmlFor="su-name">
                 <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
-                  <circle
-                    cx="8"
-                    cy="5"
-                    r="3"
-                    fill="none"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                  />
-                  <path
-                    d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
+                  <circle cx="8" cy="5" r="3" fill="none" stroke="#5a8fd0" strokeWidth="1.4" />
+                  <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#5a8fd0" strokeWidth="1.4" fill="none" strokeLinecap="round" />
                 </svg>
-                Nombre del Aventurero
+                {tr.nameLabel}
               </label>
               <input
                 id="su-name"
                 className={cx(s.input, errors.name && s.inputError)}
                 type="text"
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setErrors((p) => ({ ...p, name: undefined }));
-                }}
-                placeholder="Introduce tu nombre de aventurero"
+                onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: undefined })); }}
+                placeholder={tr.namePlaceholder}
                 autoComplete="name"
               />
-              {errors.name && (
-                <FieldError
-                  message={errors.name}
-                  className={s.fieldError}
-                  iconColor="#7090d0"
-                />
-              )}
+              {errors.name && <FieldError message={errors.name} className={s.fieldError} iconColor="#7090d0" />}
             </div>
 
             <div className={s.field}>
               <label className={s.label} htmlFor="su-email">
                 <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
-                  <path
-                    d="M2 4h12v8H2z"
-                    fill="none"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                  />
-                  <path
-                    d="M2 4l6 5 6-5"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                    fill="none"
-                  />
+                  <path d="M2 4h12v8H2z" fill="none" stroke="#5a8fd0" strokeWidth="1.4" />
+                  <path d="M2 4l6 5 6-5" stroke="#5a8fd0" strokeWidth="1.4" fill="none" />
                 </svg>
-                Email
+                {tr.emailLabel}
               </label>
               <input
                 id="su-email"
                 className={cx(s.input, errors.email && s.inputError)}
                 type="email"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setErrors((p) => ({
-                    ...p,
-                    email: undefined,
-                    general: undefined,
-                  }));
-                }}
+                onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined, general: undefined })); }}
                 placeholder="example@example.com"
                 autoComplete="email"
               />
-              {errors.email && (
-                <FieldError
-                  message={errors.email}
-                  className={s.fieldError}
-                  iconColor="#7090d0"
-                />
-              )}
+              {errors.email && <FieldError message={errors.email} className={s.fieldError} iconColor="#7090d0" />}
             </div>
 
             <div className={s.field}>
               <label className={s.label} htmlFor="su-password">
                 <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
-                  <rect
-                    x="3"
-                    y="7"
-                    width="10"
-                    height="8"
-                    rx="1"
-                    fill="none"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                  />
-                  <path
-                    d="M5 7V5a3 3 0 016 0v2"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.4"
-                    fill="none"
-                  />
+                  <rect x="3" y="7" width="10" height="8" rx="1" fill="none" stroke="#5a8fd0" strokeWidth="1.4" />
+                  <path d="M5 7V5a3 3 0 016 0v2" stroke="#5a8fd0" strokeWidth="1.4" fill="none" />
                   <circle cx="8" cy="11" r="1.2" fill="#5a8fd0" />
                 </svg>
-                Contraseña
+                {tr.passwordLabel}
               </label>
               <input
                 id="su-password"
                 className={cx(s.input, errors.password && s.inputError)}
                 type="password"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setErrors((p) => ({ ...p, password: undefined }));
-                }}
-                placeholder="Introduce tu contraseña"
+                onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: undefined })); }}
+                placeholder={tr.passwordPlaceholder}
                 autoComplete="new-password"
               />
               {password && (
@@ -335,80 +221,57 @@ export default function Signup() {
                       <div
                         key={n}
                         className={s.strengthBar}
-                        style={{
-                          background:
-                            strength.level >= n ? strength.color : undefined,
-                        }}
+                        style={{ background: strength.level >= n ? strength.color : undefined }}
                       />
                     ))}
                   </div>
-                  <span
-                    className={s.strengthLabel}
-                    style={{ color: strength.color }}
-                  >
+                  <span className={s.strengthLabel} style={{ color: strength.color }}>
                     {strength.label}
                   </span>
                 </div>
               )}
-              {errors.password && (
-                <FieldError
-                  message={errors.password}
-                  className={s.fieldError}
-                  iconColor="#7090d0"
-                />
-              )}
+              {errors.password && <FieldError message={errors.password} className={s.fieldError} iconColor="#7090d0" />}
             </div>
 
             <div className={s.field}>
               <label className={s.label} htmlFor="su-confirm">
                 <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
-                  <path
-                    d="M3 8l3 3 7-7"
-                    stroke="#5a8fd0"
-                    strokeWidth="1.6"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M3 8l3 3 7-7" stroke="#5a8fd0" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Confirma la Contraseña
+                {tr.confirmLabel}
               </label>
               <input
                 id="su-confirm"
                 className={cx(s.input, errors.confirm && s.inputError)}
                 type="password"
                 value={confirm}
-                onChange={(e) => {
-                  setConfirm(e.target.value);
-                  setErrors((p) => ({ ...p, confirm: undefined }));
-                }}
-                placeholder="Repite la contraseña"
+                onChange={(e) => { setConfirm(e.target.value); setErrors((p) => ({ ...p, confirm: undefined })); }}
+                placeholder={tr.confirmPlaceholder}
                 autoComplete="new-password"
               />
-              {errors.confirm && (
-                <FieldError
-                  message={errors.confirm}
-                  className={s.fieldError}
-                  iconColor="#7090d0"
-                />
-              )}
+              {errors.confirm && <FieldError message={errors.confirm} className={s.fieldError} iconColor="#7090d0" />}
             </div>
 
             <button className={s.btnPrimary} type="submit" disabled={loading}>
-              {loading ? "⚡  Sellando el Pacto..." : "✦  Unirme al Gremio"}
+              {loading ? tr.loading : tr.button}
             </button>
 
             <button
               type="button"
               className={s.btnSecondary}
-              onClick={() => alert("Registro social aún no implementado")}
+              disabled={googleLoading || loading}
+              onClick={async () => {
+                setGoogleLoading(true);
+                try { await signInWithGoogle(); }
+                catch { setErrors({ general: tr.err.generic }); setGoogleLoading(false); }
+              }}
             >
-              ✦ Registrarme con Pergamino Mágico
+              {googleLoading ? "..." : tr.socialButton}
             </button>
           </form>
 
           <div className={s.footer}>
-            ¿Ya tienes cuenta?{" "}
+            {tr.hasAccount}{" "}
             <a
               className={s.footerLink}
               role="button"
@@ -416,13 +279,11 @@ export default function Signup() {
               onClick={() => router.push("/auth/login")}
               onKeyDown={(e) => e.key === "Enter" && router.push("/auth/login")}
             >
-              Cruzar el Umbral
+              {tr.loginLink}
             </a>
           </div>
 
-          <div className={s.quote}>
-            &ldquo;Toda leyenda comienza con un primer paso.&rdquo;
-          </div>
+          <div className={s.quote}>&ldquo;{tr.quote}&rdquo;</div>
         </div>
 
         <div className={s.borderBottom} />

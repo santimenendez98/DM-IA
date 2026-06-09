@@ -3,7 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { broadcastToChannel } from "@/lib/supabase/broadcast";
 import { callDM, DmRateLimitError } from "@/lib/openrouter";
+import { checkDMRateLimit } from "@/lib/rate-limit";
 import type { Character } from "@/types/character";
+
+type Lang = "es" | "en" | "pt";
+
+const LANG_INSTRUCTION: Record<Lang, string> = {
+  es: "Responde en español.",
+  en: "Respond in English.",
+  pt: "Responde em português.",
+};
 
 export const maxDuration = 60; // seconds — requires Vercel Pro for >10s, free up to 10s on Hobby
 
@@ -42,6 +51,7 @@ function buildSystemInstruction(
     system_prompt: string | null;
   },
   characters: Character[],
+  lang: Lang = "es",
 ): string {
   const setting = SETTING_LABELS[campaign.setting] ?? campaign.setting;
   const tone = TONE_LABELS[campaign.tone] ?? campaign.tone;
@@ -96,7 +106,7 @@ function buildSystemInstruction(
 
     `\n── NARRATIVA ──`,
     `Párrafos cortos (3-4 oraciones). Oraciones directas. Lenguaje accesible; 3-6 párrafos por respuesta.`,
-    `Termina siempre con situación abierta que invite a actuar. No decidas por los jugadores. Responde en español.`,
+    `Termina siempre con situación abierta que invite a actuar. No decidas por los jugadores. ${LANG_INSTRUCTION[lang]}`,
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -345,12 +355,14 @@ export async function POST(
     return NextResponse.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const { character_id, content, invoke_dm, dm_intro } = body as {
+  const { character_id, content, invoke_dm, dm_intro, lang: rawLang } = body as {
     character_id?: string;
     content?: string;
     invoke_dm?: boolean;
     dm_intro?: boolean;
+    lang?: string;
   };
+  const lang: Lang = (["es", "en", "pt"].includes(rawLang ?? "") ? rawLang as Lang : "es");
 
   const admin = createAdminClient();
 
@@ -379,8 +391,17 @@ export async function POST(
       }>) ?? [];
     const characters = partyRows.map((r) => r.characters) as Character[];
 
+    const introRateLimit = await checkDMRateLimit(user.id);
+    if (!introRateLimit.allowed) {
+      const retryAfter = Math.ceil((introRateLimit.resetAt.getTime() - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: "Límite de llamadas al DM alcanzado. Espera a la próxima hora.", retry_after: retryAfter },
+        { status: 429 },
+      );
+    }
+
     const introInstruction =
-      buildSystemInstruction(campaign, characters) +
+      buildSystemInstruction(campaign, characters, lang) +
       "\n\nEsta es la introducción inicial de la aventura. Narra la escena de apertura sin esperar ninguna acción del jugador. Describe el lugar, el ambiente y cómo los aventureros llegan al inicio de la historia. Escribe en párrafos cortos y directos: máximo 3 o 4 oraciones por párrafo. Usa lenguaje accesible que mantenga la atmósfera sin volverse difícil de leer. Termina con una situación concreta que exija la atención o decisión de los jugadores: una amenaza visible, un personaje que los interpela, o un evento que requiera respuesta. El primer movimiento debe quedar en sus manos.";
 
     let dmContent: string;
@@ -495,12 +516,26 @@ export async function POST(
     return NextResponse.json({ message: charMsgFlat }, { status: 201 });
   }
 
+  const dmRateLimit = await checkDMRateLimit(user.id);
+  if (!dmRateLimit.allowed) {
+    const retryAfter = Math.ceil((dmRateLimit.resetAt.getTime() - Date.now()) / 1000);
+    const rateLimitMsg: Record<Lang, string> = {
+      es: `Límite de ${dmRateLimit.limit} llamadas al DM por hora alcanzado. Disponible en ${Math.ceil(retryAfter / 60)} min.`,
+      en: `Hourly DM limit of ${dmRateLimit.limit} calls reached. Available in ${Math.ceil(retryAfter / 60)} min.`,
+      pt: `Limite de ${dmRateLimit.limit} chamadas ao Mestre por hora atingido. Disponível em ${Math.ceil(retryAfter / 60)} min.`,
+    };
+    return NextResponse.json(
+      { message: charMsgFlat, dm_error: rateLimitMsg[lang], retry_after: retryAfter },
+      { status: 201 },
+    );
+  }
+
   broadcastToChannel(`play:${campaignId}`, "dm_thinking", {});
 
-  // ── Invoke Gemini DM ───────────────────────────────────────
+  // ── Invoke DM ─────────────────────────────────────────────
 
   const characters = partyRows.map((r) => r.characters) as Character[];
-  const systemInstruction = buildSystemInstruction(campaign, characters);
+  const systemInstruction = buildSystemInstruction(campaign, characters, lang);
 
   // Fetch up to 20 recent messages for context (includes the one just inserted)
   const { data: historyRows } = await admin
