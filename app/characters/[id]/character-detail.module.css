@@ -55,6 +55,110 @@
 }
 .back:hover { color: #c9a030; }
 
+/* ── Notification banners ────────────────────────────────────── */
+
+.notifStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.notifBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-radius: 3px;
+  flex-wrap: wrap;
+}
+
+.notifIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notifText {
+  flex: 1;
+  min-width: 160px;
+}
+
+.notifTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.notifSub {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.notifBtn {
+  padding: 8px 16px;
+  border-radius: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Gold variant — level up */
+.notifLevelUp {
+  background: linear-gradient(160deg, rgba(184,134,11,0.1) 0%, rgba(40,28,8,0.25) 100%);
+  border: 1px solid rgba(184,134,11,0.4);
+}
+.notifLevelUp .notifIcon  { background: rgba(184,134,11,0.12); border: 1px solid rgba(184,134,11,0.3); color: #c9a030; }
+.notifLevelUp .notifTitle { color: #c9a030; }
+.notifLevelUp .notifSub   { color: #6b5535; }
+.notifLevelUp .notifBtn   {
+  background: linear-gradient(160deg, rgba(184,134,11,0.18) 0%, rgba(58,40,8,0.35) 100%);
+  border: 1px solid #b8860b;
+  color: #e8c040;
+  box-shadow: 0 0 8px rgba(184,134,11,0.12);
+}
+.notifLevelUp .notifBtn:hover {
+  background: linear-gradient(160deg, rgba(184,134,11,0.28) 0%, rgba(58,40,8,0.5) 100%);
+  box-shadow: 0 0 14px rgba(184,134,11,0.25);
+  transform: translateY(-1px);
+}
+
+/* Purple variant — spells */
+.notifSpells {
+  background: linear-gradient(160deg, rgba(80,60,160,0.09) 0%, rgba(15,12,30,0.2) 100%);
+  border: 1px solid rgba(80,60,160,0.35);
+}
+.notifSpells .notifIcon  { background: rgba(80,60,160,0.12); border: 1px solid rgba(100,80,200,0.3); color: #7060c0; }
+.notifSpells .notifTitle { color: #8070c0; }
+.notifSpells .notifSub   { color: #4a3870; }
+.notifSpells .notifBtn   {
+  background: linear-gradient(160deg, rgba(80,60,160,0.18) 0%, rgba(20,15,40,0.35) 100%);
+  border: 1px solid #5040a0;
+  color: #9080d0;
+  box-shadow: 0 0 8px rgba(80,60,160,0.1);
+}
+.notifSpells .notifBtn:hover {
+  background: linear-gradient(160deg, rgba(80,60,160,0.28) 0%, rgba(20,15,40,0.5) 100%);
+  border-color: #7060c0;
+  color: #b8b0e8;
+  box-shadow: 0 0 14px rgba(100,80,200,0.2);
+  transform: translateY(-1px);
+}
+.notifBtn:active { transform: translateY(0) !important; }
+
 /* ── Hero header ─────────────────────────────────────────────── */
 
 .hero {
@@ -81,13 +185,13 @@
   justify-content: space-between;
   gap: 24px;
   padding: 28px 36px;
-  flex-wrap: wrap;
 }
 
 .heroLeft {
   display: flex;
   align-items: center;
   gap: 20px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -317,6 +421,264 @@
   font-style: italic;
   line-height: 1.2;
 }
+
+/* ── Combat strip ────────────────────────────────────────────── */
+
+.combatStrip {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 12px 20px;
+}
+
+.combatItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.combatValue {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #e0cc90;
+  line-height: 1;
+}
+
+.combatLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #5c4828;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.combatSep {
+  width: 1px;
+  background: rgba(184,134,11,0.12);
+  flex-shrink: 0;
+  margin: 6px 0;
+}
+
+/* ── Saving throws ───────────────────────────────────────────── */
+
+.savesList {
+  padding: 10px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.05);
+}
+.saveRow:last-child { border-bottom: none; }
+
+.saveDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #3e2e10;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.saveDotFilled {
+  border-color: #b8860b;
+  background: #b8860b;
+}
+
+.saveName {
+  flex: 1;
+  font-size: 13px;
+  color: #a08050;
+}
+
+.saveBonus {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Skills ──────────────────────────────────────────────────── */
+
+.skillsList {
+  padding: 10px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skillRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.04);
+}
+.skillRow:last-of-type { border-bottom: none; }
+
+.skillDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #3e2e10;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.skillDotFilled {
+  border-color: #b8860b;
+  background: #b8860b;
+}
+
+.skillName {
+  flex: 1;
+  font-size: 12px;
+  color: #a08050;
+}
+
+.skillStat {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #4a3510;
+  letter-spacing: 0.06em;
+  min-width: 28px;
+  text-align: center;
+}
+
+.skillBonus {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: right;
+}
+
+.skillPassive {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(184,134,11,0.1);
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #5c4828;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Inventory ───────────────────────────────────────────────── */
+
+.inventoryList {
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inventoryItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.06);
+}
+.inventoryItem:last-child { border-bottom: none; }
+
+.inventoryBullet {
+  font-size: 12px;
+  color: #7a5c1e;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.inventoryInfo { flex: 1; min-width: 0; }
+
+.inventoryName {
+  font-size: 14px;
+  color: #c9a888;
+  line-height: 1.3;
+}
+
+.inventoryDesc {
+  font-size: 11px;
+  color: #4a3510;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ── Class / Race features ───────────────────────────────────── */
+
+.featuresList { padding: 12px 20px; }
+
+.featureRow {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.07);
+}
+.featureRow:last-child { border-bottom: none; }
+
+.featureName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c9a030;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.featureDesc {
+  font-size: 13px;
+  color: #8b6b35;
+  line-height: 1.5;
+}
+
+/* ── Racial traits list ──────────────────────────────────────── */
+
+.traitsList {
+  list-style: none;
+  margin: 0;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.traitRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: #8b6b35;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(184,134,11,0.06);
+}
+.traitRow:last-child { border-bottom: none; }
+
+.traitBullet {
+  font-size: 9px;
+  color: #7a5c1e;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+/* ── Alignment badge ─────────────────────────────────────────── */
+
+.badgeAlign { background: rgba(40,20,40,0.5); border-color: #4a2a5a; color: #9a7abf; }
 
 /* ── Backstory ───────────────────────────────────────────────── */
 
@@ -655,15 +1017,934 @@
 }
 .skeleton { animation: shimmer 1.8s ease-in-out infinite; background: #2a1e10; border-radius: 2px; }
 
+/* ── Hero right (HP + level-up button) ──────────────────────── */
+
+.heroRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Level-up button ─────────────────────────────────────────── */
+
+.levelUpBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  background: linear-gradient(160deg, rgba(184,134,11,0.14) 0%, rgba(58,40,8,0.3) 100%);
+  border: 1px solid #b8860b;
+  border-radius: 2px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 10px rgba(184,134,11,0.15);
+  white-space: nowrap;
+}
+.levelUpBtn:hover {
+  background: linear-gradient(160deg, rgba(184,134,11,0.25) 0%, rgba(58,40,8,0.4) 100%);
+  box-shadow: 0 0 18px rgba(184,134,11,0.3);
+  transform: translateY(-1px);
+}
+.levelUpBtn:active { transform: translateY(0); }
+
+/* ── Level-up panel ──────────────────────────────────────────── */
+
+.levelUpPanel {
+  position: relative;
+  background: linear-gradient(160deg, #1a1208 0%, #130c05 100%);
+  border-radius: 4px;
+  margin-bottom: 20px;
+  box-shadow:
+    0 0 0 1px #7a5c1e,
+    0 0 0 3px #1a1008,
+    0 0 0 4px rgba(184,134,11,0.4),
+    0 16px 48px rgba(0,0,0,0.7),
+    0 0 60px rgba(184,134,11,0.06);
+  overflow: hidden;
+}
+
+.levelUpPanelBorder {
+  height: 3px;
+  background: linear-gradient(90deg, #3a2808, #e8c040, #b8860b, #e8c040, #3a2808);
+  animation: shimmerBorder 2.5s ease-in-out infinite;
+}
+
+@keyframes shimmerBorder {
+  0%, 100% { opacity: 0.85; }
+  50%       { opacity: 1; }
+}
+
+/* ── Level-up header ─────────────────────────────────────────── */
+
+.levelUpHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 28px 16px;
+  border-bottom: 1px solid rgba(184,134,11,0.12);
+  flex-wrap: wrap;
+}
+
+.levelUpTransition {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.levelUpOld {
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #4a3510;
+  line-height: 1;
+}
+
+.levelUpNew {
+  font-family: 'Cinzel', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: #e8c040;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(232,192,64,0.4);
+}
+
+.levelUpSubtitle {
+  flex: 1;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7a5c1e;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levelUpClose {
+  margin-left: auto;
+  padding: 6px 10px;
+  background: none;
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #4a3510;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.levelUpClose:hover { border-color: #6b5535; color: #c9a030; }
+
+/* ── Level-up sections ───────────────────────────────────────── */
+
+.luSection {
+  padding: 20px 28px;
+  border-bottom: 1px solid rgba(184,134,11,0.07);
+}
+.luSection:last-of-type { border-bottom: none; }
+
+.luSectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ── New features cards ──────────────────────────────────────── */
+
+.luFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.luFeatureCard {
+  padding: 14px 16px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(184,134,11,0.18);
+  border-left: 3px solid #b8860b;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.luFeatureCard:hover { background: rgba(184,134,11,0.06); }
+
+.luFeatureName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #e8c040;
+  letter-spacing: 0.06em;
+  margin-bottom: 5px;
+}
+
+.luFeatureDesc {
+  font-size: 13px;
+  color: #a08050;
+  line-height: 1.55;
+}
+
+/* ── Proficiency bonus upgrade ───────────────────────────────── */
+
+.luProfRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(184,134,11,0.15);
+  border-radius: 2px;
+  flex-wrap: wrap;
+}
+
+.luProfOld {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #4a3510;
+}
+
+.luProfArrow {
+  font-size: 16px;
+  color: #7a5c1e;
+}
+
+.luProfNew {
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #6aaa70;
+  text-shadow: 0 0 12px rgba(106,170,112,0.3);
+}
+
+.luProfNote {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+/* ── HP gain section ─────────────────────────────────────────── */
+
+.luHpRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.luHpFormula {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.luHpDie {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #e0cc90;
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+}
+
+.luHpPlus {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  color: #4a3510;
+}
+
+.luHpMod {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.luHpModPos { color: #6aaa70; }
+.luHpModNeg { color: #c05050; }
+
+.luHpBtns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.luHpBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+  color: #7a5c1e;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.luHpBtn:hover { border-color: #b8860b; color: #e8c040; background: rgba(184,134,11,0.08); }
+
+.luHpBtnActive {
+  border-color: #b8860b !important;
+  color: #e8c040 !important;
+  background: rgba(184,134,11,0.12) !important;
+}
+
+.luHpResult {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(106,170,112,0.07);
+  border: 1px solid rgba(106,170,112,0.2);
+  border-radius: 2px;
+}
+
+.luHpRollDetail {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+}
+
+.luHpResultVal {
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #6aaa70;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(106,170,112,0.3);
+}
+
+.luHpResultLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a7a50;
+  letter-spacing: 0.1em;
+}
+
+/* ── ASI (Ability Score Improvement) ─────────────────────────── */
+
+.luAsiCounter {
+  margin-left: auto;
+  padding: 3px 10px;
+  background: rgba(184,134,11,0.1);
+  border: 1px solid rgba(184,134,11,0.3);
+  border-radius: 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.luAsiCounterDone {
+  background: rgba(106,170,112,0.12) !important;
+  border-color: rgba(106,170,112,0.4) !important;
+  color: #6aaa70 !important;
+}
+
+.luAsiInfo {
+  font-size: 13px;
+  color: #6b5535;
+  margin: 0 0 14px;
+  line-height: 1.55;
+  font-style: italic;
+}
+
+.luAsiGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.luAsiCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 6px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  text-align: center;
+  transition: all 0.18s;
+}
+
+.luAsiCardBoosted {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+}
+
+.luAsiAbbr {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 700;
+  color: #7a5c1e;
+  letter-spacing: 0.1em;
+}
+
+.luAsiScore {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #e0cc90;
+  line-height: 1;
+}
+
+.luAsiDelta {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #e8c040;
+  line-height: 1;
+}
+
+.luAsiNew {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6aaa70;
+  text-shadow: 0 0 8px rgba(106,170,112,0.3);
+}
+
+.luAsiBtns {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.luAsiBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+  color: #7a5c1e;
+  font-size: 15px;
+  font-family: 'Cinzel', serif;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.luAsiBtn:hover:not(:disabled) { border-color: #b8860b; color: #e8c040; background: rgba(184,134,11,0.12); }
+.luAsiBtn:disabled { cursor: not-allowed; }
+
+.luAsiBtnSub { color: #6b5535; }
+.luAsiBtnSub:hover:not(:disabled) { border-color: #6b5535; color: #a08050; background: rgba(107,85,53,0.1); }
+
+.luAsiBtnOff { opacity: 0.3; }
+
+/* ── Level-up action buttons ─────────────────────────────────── */
+
+.luActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 28px;
+  border-top: 1px solid rgba(184,134,11,0.1);
+}
+
+.luCancel {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+  color: #4a3510;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.luCancel:hover:not(:disabled) { border-color: #6b5535; color: #8b6b35; }
+.luCancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.luConfirm {
+  padding: 11px 28px;
+  background: linear-gradient(160deg, rgba(184,134,11,0.2) 0%, rgba(58,40,8,0.4) 100%);
+  border: 1px solid #b8860b;
+  border-radius: 2px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+  box-shadow: 0 0 12px rgba(184,134,11,0.15);
+}
+.luConfirm:hover:not(:disabled) {
+  background: linear-gradient(160deg, rgba(184,134,11,0.3) 0%, rgba(58,40,8,0.5) 100%);
+  box-shadow: 0 0 20px rgba(184,134,11,0.28);
+  transform: translateY(-1px);
+}
+.luConfirm:active:not(:disabled) { transform: translateY(0); }
+.luConfirm:disabled { cursor: not-allowed; }
+
+.luConfirmDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── Waiting for DM indicator ────────────────────────────────── */
+
+.waitingDM {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #4a3510;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Initial spells prompt ───────────────────────────────────── */
+
+.initSpellsPrompt {
+  position: relative;
+  background: linear-gradient(160deg, #0c0d1c 0%, #09090f 100%);
+  border-radius: 4px;
+  margin-bottom: 20px;
+  box-shadow:
+    0 0 0 1px #1e1a50,
+    0 0 0 3px #09090f,
+    0 0 0 4px rgba(80,60,160,0.25),
+    0 8px 20px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+.initSpellsPromptBorder {
+  height: 2px;
+  background: linear-gradient(90deg, #16163a, #5040a0, #9080e0, #5040a0, #16163a);
+  animation: shimmerBorder 2.8s ease-in-out infinite;
+}
+
+.initSpellsPromptBody {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 28px;
+  flex-wrap: wrap;
+}
+
+.initSpellsPromptIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(80,60,160,0.12);
+  border: 1px solid rgba(100,80,200,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #7060c0;
+}
+
+.initSpellsPromptInfo {
+  flex: 1;
+  min-width: 200px;
+}
+
+.initSpellsPromptTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #8070c0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.initSpellsPromptSub {
+  font-size: 13px;
+  color: #4a3a70;
+  line-height: 1.5;
+}
+
+.initSpellsPromptSub strong {
+  color: #9080d0;
+  font-weight: 600;
+}
+
+.initSpellsPromptBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: linear-gradient(160deg, rgba(80,60,160,0.18) 0%, rgba(20,15,40,0.35) 100%);
+  border: 1px solid #5040a0;
+  border-radius: 2px;
+  color: #8878c8;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(80,60,160,0.1);
+}
+.initSpellsPromptBtn:hover {
+  background: linear-gradient(160deg, rgba(80,60,160,0.3) 0%, rgba(20,15,40,0.5) 100%);
+  border-color: #7868c0;
+  color: #b8b0e8;
+  box-shadow: 0 0 16px rgba(100,80,200,0.22);
+  transform: translateY(-1px);
+}
+.initSpellsPromptBtn:active { transform: translateY(0); }
+
+/* ── Spell picker ────────────────────────────────────────────── */
+
+.spellTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.spellTab {
+  padding: 5px 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.spellTab:hover { border-color: #6b5535; color: #a08050; }
+
+.spellTabActive {
+  border-color: #b8860b !important;
+  color: #e8c040 !important;
+  background: rgba(184,134,11,0.1) !important;
+}
+
+.spellSearchWrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.spellSearchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #4a3510;
+  pointer-events: none;
+}
+
+.spellSearch {
+  width: 100%;
+  padding: 8px 12px 8px 30px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #c9a888;
+  font-family: 'Crimson Text', serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.spellSearch:focus { border-color: #6b5535; }
+.spellSearch::placeholder { color: #3a2808; }
+
+.spellList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.spellList::-webkit-scrollbar { width: 4px; }
+.spellList::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 2px; }
+.spellList::-webkit-scrollbar-thumb { background: #3a2808; border-radius: 2px; }
+
+.spellCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.spellCard:hover:not(:disabled) { border-color: #6b5535; background: rgba(0,0,0,0.35); }
+
+.spellCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+}
+
+.spellCardDisabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.spellCardCheck {
+  font-size: 13px;
+  color: #7a5c1e;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.spellCardSelected .spellCardCheck { color: #e8c040; }
+
+.spellCardBody { flex: 1; min-width: 0; }
+
+.spellCardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.spellCardName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #c9a888;
+}
+.spellCardSelected .spellCardName { color: #e8c040; }
+
+.spellCardSchool {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #4a3510;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border: 1px solid #2e2010;
+  border-radius: 10px;
+}
+
+.spellCardDesc {
+  font-size: 12px;
+  color: #6b5535;
+  line-height: 1.5;
+}
+
+.spellEmpty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #3a2808;
+  font-style: italic;
+}
+
+/* ── Spell replacement section ───────────────────────────────── */
+
+.spellReplaceSection {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(184,134,11,0.1);
+}
+
+.spellReplaceTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a5c1e;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.spellReplaceList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.spellReplaceItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  color: #8b6b35;
+  transition: all 0.15s;
+}
+.spellReplaceItem:hover { border-color: #7a2020; color: #c07070; }
+
+.spellReplaceItemActive {
+  border-color: #7a2020 !important;
+  background: rgba(122,32,32,0.15) !important;
+  color: #c07070 !important;
+}
+
+.spellReplaceCheck { font-size: 11px; color: inherit; flex-shrink: 0; }
+
+.spellReplaceLevel {
+  margin-left: auto;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #4a3510;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+/* ── Level-up toast ──────────────────────────────────────────── */
+
+@keyframes levelToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+}
+
+.levelToast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: 14px 32px;
+  background: linear-gradient(160deg, #1e1308, #130c05);
+  border: 1px solid #e8c040;
+  border-radius: 3px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  box-shadow:
+    0 0 0 1px rgba(232,192,64,0.15),
+    0 12px 40px rgba(0,0,0,0.7),
+    0 0 30px rgba(184,134,11,0.2);
+  animation: levelToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 12px rgba(232,192,64,0.4);
+}
+
+/* ── Spells known sheet section ──────────────────────────────── */
+
+.spellSheetGroup {
+  padding: 8px 20px 0;
+}
+.spellSheetGroup:last-of-type { padding-bottom: 14px; }
+
+.spellSheetGroupLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #b8860b;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  margin-top: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(184,134,11,0.1);
+}
+
+.spellSheetItem {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(184,134,11,0.05);
+}
+.spellSheetItem:last-child { border-bottom: none; }
+
+.spellSheetName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c9a888;
+  margin-bottom: 2px;
+}
+
+.spellSheetSchool {
+  font-size: 9px;
+  color: #4a3510;
+  font-style: italic;
+  margin-bottom: 3px;
+}
+
+.spellSheetDesc {
+  font-size: 12px;
+  color: #6b5535;
+  line-height: 1.45;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 780px) {
-  .layout   { grid-template-columns: 1fr; }
-  .statGrid { grid-template-columns: repeat(3, 1fr); }
-  .heroBody { flex-direction: column; align-items: flex-start; }
-  .heroHp   { width: 100%; }
-  .content  { padding: 20px 16px 60px; }
+  .layout      { grid-template-columns: 1fr; }
+  .statGrid    { grid-template-columns: repeat(3, 1fr); }
+  .heroBody    { flex-wrap: wrap; }
+  .heroLeft    { flex: 1 1 0; }
+  .heroRight   { align-items: flex-start; flex-shrink: 0; }
+  .heroHp      { min-width: 140px; }
+  .levelUpBtn  { width: 100%; justify-content: center; }
+  .initSpellsPromptBody { padding: 16px 20px; gap: 14px; }
+  .initSpellsPromptBtn  { width: 100%; justify-content: center; }
+  .content     { padding: 20px 16px 60px; }
   .sidebarPortrait { max-width: 260px; margin: 0 auto 16px; }
+  .combatStrip { padding: 8px 12px; }
+  .combatValue { font-size: 18px; }
+  .combatLabel { font-size: 7px; }
+  .levelUpHead { padding: 16px 20px 12px; }
+  .luSection   { padding: 16px 20px; }
+  .luActions   { padding: 14px 20px; }
+  .luAsiGrid   { grid-template-columns: repeat(3, 1fr); }
+  .luHpBtns    { flex-direction: column; }
+  .luHpBtn     { width: 100%; justify-content: center; }
+  .spellTabs   { gap: 3px; }
+  .spellTab    { font-size: 7.5px; padding: 4px 8px; }
+  .spellList   { max-height: 240px; }
 }
 
 @media (max-width: 480px) {

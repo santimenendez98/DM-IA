@@ -5,7 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
-import { langStore } from "@/lib/lang";
+import { langStore, useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
@@ -63,19 +64,6 @@ const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880"] as const;
 
 const VOTE_DURATION = 30; // seconds
 
-const SETTING_LABELS: Record<string, string> = {
-  fantasy: "Fantasía",
-  "sci-fi": "Ciencia Ficción",
-  horror: "Horror Arcano",
-  cyberpunk: "Cyberpunk",
-  custom: "Personalizado",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  epic: "Épico", dark: "Oscuro", comedic: "Cómico",
-  gritty: "Crudo", whimsical: "Caprichoso",
-};
-
 // ── Roll-request types & helpers ───────────────────────────────
 
 interface RollRequest {
@@ -129,8 +117,8 @@ function statMod(score: number): string {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
+function fmtTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleTimeString(locale, {
     hour: "2-digit", minute: "2-digit",
   });
 }
@@ -150,6 +138,8 @@ function CharacterCard({
   onClick: () => void;
   onStatRoll?: (stat: keyof CharacterStats, score: number) => void;
 }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   const hpPct = Math.min(100, Math.round((character.hp / character.max_hp) * 100));
 
   return (
@@ -165,14 +155,14 @@ function CharacterCard({
           <div className={s.charName}>{character.name}</div>
           <div className={s.charMeta}>
             <span className={s.charBadge}>{character.class}</span>
-            <span className={s.charBadge}>Nv.{character.level}</span>
+            <span className={s.charBadge}>{tr.levelAbbr}{character.level}</span>
           </div>
         </div>
         {active && <div className={s.charActivePip} />}
       </div>
 
       <div className={s.charHpRow}>
-        <span className={s.charHpLabel}>PV</span>
+        <span className={s.charHpLabel}>{tr.hpAbbr}</span>
         <div className={s.charHpBar}>
           <div
             className={cx(
@@ -196,7 +186,7 @@ function CharacterCard({
               className={cx(s.statCell, onStatRoll && s.statCellRollable)}
               onClick={() => onStatRoll?.(k, score)}
               role={onStatRoll ? "button" : undefined}
-              title={onStatRoll ? `Tirar prueba de ${STAT_ABBR[k]} (d${STAT_DIE[k]}${mod})` : undefined}
+              title={onStatRoll ? tr.rollStatFmt.replace("{n}", STAT_ABBR[k]) : undefined}
             >
               <span className={s.statAbbr}>{STAT_ABBR[k]}</span>
               <span className={s.statVal}>{score}</span>
@@ -217,7 +207,7 @@ function CharacterCard({
               <path d="M4 4.5C4 3 4.8 1.5 6 1.5s2 1.5 2 3" fill="none" stroke="#b8860b" strokeWidth="1.1" strokeLinecap="round" />
               <line x1="6" y1="4.5" x2="6" y2="11.5" stroke="#b8860b" strokeWidth="0.9" />
             </svg>
-            <span>Inventario</span>
+            <span>{tr.inventory}</span>
             <span className={s.charItemsCount}>{character.items.length}</span>
           </div>
           <ul className={s.charItemsList}>
@@ -228,7 +218,7 @@ function CharacterCard({
               </li>
             ))}
             {character.items.length > 5 && (
-              <li className={s.charItemMore}>+{character.items.length - 5} más</li>
+              <li className={s.charItemMore}>{tr.moreItemsFmt.replace("{n}", String(character.items.length - 5))}</li>
             )}
           </ul>
         </div>
@@ -240,6 +230,8 @@ function CharacterCard({
 // ── DM message ─────────────────────────────────────────────────
 
 function DmMessage({ message }: { message: Message }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   const { text } = parseRollRequests(message.content);
   const paragraphs = text.split(/\n\n+/).filter(Boolean);
   return (
@@ -252,8 +244,8 @@ function DmMessage({ message }: { message: Message }) {
           />
           <circle cx="7" cy="7" r="1.6" fill="#e8c040" opacity="0.55" />
         </svg>
-        <span className={s.msgDmLabel}>Dungeon Master</span>
-        <span className={s.msgTime}>{fmtTime(message.created_at)}</span>
+        <span className={s.msgDmLabel}>{tr.dungeonMaster}</span>
+        <span className={s.msgTime}>{fmtTime(message.created_at, tr.locale)}</span>
       </div>
       <div className={s.msgDmBody}>
         {paragraphs.length > 1
@@ -275,7 +267,9 @@ function CharMessage({
   color: string;
   imageUrl?: string | null;
 }) {
-  const name = message.character_name ?? "Aventurero";
+  const { lang } = useLang();
+  const tr = t[lang].play;
+  const name = message.character_name ?? tr.adventurer;
   return (
     <div className={s.msgChar}>
       <div className={s.msgCharAvatar} style={imageUrl ? {} : { background: color }}>
@@ -289,7 +283,7 @@ function CharMessage({
           <span className={s.msgCharName} style={{ color }}>
             {name}
           </span>
-          <span className={s.msgTime}>{fmtTime(message.created_at)}</span>
+          <span className={s.msgTime}>{fmtTime(message.created_at, tr.locale)}</span>
         </div>
         <div className={s.msgCharBubble}>{message.content}</div>
       </div>
@@ -318,6 +312,8 @@ function RollsPanel({
   onSend: (msg: string) => void;
   disabled: boolean;
 }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   const [rolling, setRolling] = useState<boolean[]>(() => requests.map(() => false));
 
   const allDone = requests.every((r) => sharedRolls[r.personaje ?? "_"] !== undefined);
@@ -365,7 +361,7 @@ function RollsPanel({
           <circle cx="10" cy="10" r="1.3" fill="#e8c040" />
         </svg>
         <span className={s.rollsPanelTitle}>
-          {requests.length === 1 ? "Tirada requerida" : `${requests.length} tiradas requeridas`}
+          {requests.length === 1 ? tr.rollRequiredOne : tr.rollRequiredFmt.replace("{n}", String(requests.length))}
         </span>
       </div>
 
@@ -415,10 +411,10 @@ function RollsPanel({
                     disabled={disabled || rolling[i]}
                     type="button"
                   >
-                    {rolling[i] ? "···" : !done ? `Tirar ${r.dado}` : "Retirar"}
+                    {rolling[i] ? "···" : !done ? tr.rollBtn.replace("{n}", r.dado) : tr.rerollBtn}
                   </button>
                 ) : !done ? (
-                  <span className={s.rollItemWaiting}>En espera...</span>
+                  <span className={s.rollItemWaiting}>{tr.rollWaiting}</span>
                 ) : null}
               </div>
             </div>
@@ -433,12 +429,10 @@ function RollsPanel({
           disabled={!allDone || disabled}
           type="button"
         >
-          {allDone ? "Enviar resultados al DM" : `Esperando ${pendingCount} tirada${pendingCount !== 1 ? "s" : ""}...`}
+          {allDone ? tr.rollSend : pendingCount === 1 ? tr.rollWaitingOneFmt.replace("{n}", String(pendingCount)) : tr.rollWaitingFmt.replace("{n}", String(pendingCount))}
         </button>
       ) : (
-        <p className={s.rollsPanelNote}>
-          El líder enviará los resultados al DM cuando todos hayan tirado.
-        </p>
+        <p className={s.rollsPanelNote}>{tr.rollLeaderNote}</p>
       )}
     </div>
   );
@@ -453,6 +447,8 @@ function DmRateLimitNote({
   secsLeft: number;
   limitType: "minute" | "day";
 }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   return (
     <div className={s.rateLimitNote}>
       <div className={s.rateLimitIcon} aria-hidden>
@@ -463,16 +459,12 @@ function DmRateLimitNote({
         </svg>
       </div>
       <div className={s.rateLimitBody}>
-        <span className={s.rateLimitTitle}>Límite de consultas alcanzado</span>
+        <span className={s.rateLimitTitle}>{tr.rateLimitTitle}</span>
         {limitType === "day" ? (
-          <span className={s.rateLimitText}>
-            Se alcanzó el <strong>límite diario</strong> de consultas.
-            La partida podrá continuar mañana.
-          </span>
+          <span className={s.rateLimitText}>{tr.rateLimitDay}</span>
         ) : (
           <span className={s.rateLimitText}>
-            Demasiadas consultas seguidas. El Dungeon Master podrá responder en{" "}
-            <strong className={s.rateLimitTimer}>{secsLeft}s</strong>
+            {tr.rateLimitMinuteFmt.replace("{n}", String(secsLeft))}
           </span>
         )}
       </div>
@@ -483,6 +475,8 @@ function DmRateLimitNote({
 // ── Level up notice (shown in chat when a character levels up) ─
 
 function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   return (
     <div className={s.levelUpNote}>
       <div className={s.levelUpIcon} aria-hidden>
@@ -497,8 +491,8 @@ function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
         {updates.map((u) => (
           <div key={u.character_id} className={s.levelUpEntry}>
             <span className={s.levelUpName}>{u.name}</span>
-            <span className={s.levelUpText}> ha alcanzado el </span>
-            <span className={s.levelUpLevel}>Nivel {u.level}</span>
+            <span className={s.levelUpText}> {tr.levelUpText} </span>
+            <span className={s.levelUpLevel}>{tr.levelFmt.replace("{n}", String(u.level))}</span>
           </div>
         ))}
       </div>
@@ -509,6 +503,8 @@ function LevelUpNote({ updates }: { updates: LevelUpItem[] }) {
 // ── Item grant notice (shown in chat when DM gives an item) ───
 
 function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   return (
     <div className={s.itemGrantNote}>
       <div className={s.itemGrantIcon} aria-hidden>
@@ -523,7 +519,7 @@ function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
         {grants.map((g, i) => (
           <div key={i} className={s.itemGrantEntry}>
             <span className={s.itemGrantChar}>{g.character_name}</span>
-            <span className={s.itemGrantVerb}> recibe </span>
+            <span className={s.itemGrantVerb}> {tr.itemGrantVerb} </span>
             <span className={s.itemGrantName}>{g.item}</span>
             {g.description && (
               <span className={s.itemGrantDesc}> — {g.description}</span>
@@ -538,12 +534,14 @@ function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
 // ── DM thinking indicator ──────────────────────────────────────
 
 function DmThinking() {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   return (
     <div className={s.dmThinking}>
       <div className={s.dmThinkingDots}>
         <span /><span /><span />
       </div>
-      <span className={s.dmThinkingText}>El Dungeon Master está narrando...</span>
+      <span className={s.dmThinkingText}>{tr.dmThinking}</span>
     </div>
   );
 }
@@ -551,6 +549,8 @@ function DmThinking() {
 // ── Player typing indicator ────────────────────────────────────
 
 function TypingIndicator({ name, color }: { name: string; color: string }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   return (
     <div className={s.typingIndicator}>
       <div className={s.typingAvatar} style={{ background: color }}>
@@ -558,7 +558,7 @@ function TypingIndicator({ name, color }: { name: string; color: string }) {
       </div>
       <div className={s.typingBubble}>
         <span className={s.typingName} style={{ color }}>{name}</span>
-        <span className={s.typingLabel}>está escribiendo</span>
+        <span className={s.typingLabel}>{tr.typingLabel}</span>
         <div className={s.typingDots}>
           <span /><span /><span />
         </div>
@@ -586,6 +586,8 @@ function VoteModal({
   onCastVote: (vote: boolean) => void;
   onCancel: () => void;
 }) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   const yesCount   = Object.values(activeVote.votes).filter(Boolean).length;
   const noCount    = Object.values(activeVote.votes).filter((v) => v === false).length;
   const pending    = activeVote.voter_ids.length - Object.keys(activeVote.votes).length;
@@ -604,7 +606,7 @@ function VoteModal({
                 fill="none" stroke="#b8860b" strokeWidth="1.2" strokeLinejoin="round"
               />
             </svg>
-            <span>Votación: ¿Actuar ahora?</span>
+            <span>{tr.voteTitle}</span>
           </div>
           <div className={cx(s.voteTimer, voteCountdown <= 10 && s.voteTimerUrgent)}>
             {voteCountdown}s
@@ -621,11 +623,11 @@ function VoteModal({
         </div>
 
         <div className={s.voteTally}>
-          <span className={s.voteTallyYes}>{yesCount} Sí</span>
+          <span className={s.voteTallyYes}>{yesCount} {tr.voteYes}</span>
           <span className={s.voteTallyDivider}>·</span>
-          <span className={s.voteTallyNo}>{noCount} No</span>
+          <span className={s.voteTallyNo}>{noCount} {tr.voteNo}</span>
           <span className={s.voteTallyDivider}>·</span>
-          <span className={s.voteTallyPending}>{pending} pendiente{pending !== 1 && "s"}</span>
+          <span className={s.voteTallyPending}>{pending} {pending === 1 ? tr.votePendingOne : tr.votePendingMany}</span>
         </div>
 
         <div className={s.voterList}>
@@ -638,7 +640,7 @@ function VoteModal({
               : "#6a5030";
             const name = chars.length > 0
               ? chars.map((c) => c.name).join(" & ")
-              : uid === campaign.user_id ? "Dungeon Master" : "Aventurero";
+              : uid === campaign.user_id ? tr.dungeonMaster : tr.adventurer;
             return (
               <div key={uid} className={s.voterRow}>
                 <div className={s.voterAvatar} style={firstChar?.image_url ? {} : { background: color }}>
@@ -649,14 +651,14 @@ function VoteModal({
                 </div>
                 <span className={s.voterName}>{name}</span>
                 {uid === activeVote.proposer_id && (
-                  <span className={s.voterProposer}>propone</span>
+                  <span className={s.voterProposer}>{tr.voteProposer}</span>
                 )}
                 <span className={cx(
                   s.voterVote,
                   vote === true  && s.voterVoteYes,
                   vote === false && s.voterVoteNo,
                 )}>
-                  {vote === true ? "Sí" : vote === false ? "No" : "···"}
+                  {vote === true ? tr.voteYes : vote === false ? tr.voteNo : "···"}
                 </span>
               </div>
             );
@@ -666,14 +668,14 @@ function VoteModal({
         <div className={s.voteFooter}>
           {isProposer ? (
             <>
-              <span className={s.voteWaiting}>Esperando votos...</span>
+              <span className={s.voteWaiting}>{tr.voteWaiting}</span>
               <button className={s.voteCancelBtn} onClick={onCancel} type="button">
-                Cancelar
+                {tr.voteCancel}
               </button>
             </>
           ) : myVote !== undefined ? (
             <span className={s.voteWaiting}>
-              Tu voto: <strong>{myVote ? "Sí" : "No"}</strong>
+              {tr.voteMineFmt.replace("{n}", myVote ? tr.voteYes : tr.voteNo)}
             </span>
           ) : (
             <>
@@ -682,13 +684,13 @@ function VoteModal({
                   <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                   <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                 </svg>
-                No
+                {tr.voteNo}
               </button>
               <button className={s.voteYesBtn} onClick={() => onCastVote(true)} type="button">
                 <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                   <polyline points="2,6 5,9 10,3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Sí
+                {tr.voteYes}
               </button>
             </>
           )}
@@ -735,6 +737,8 @@ const DicePanel = React.forwardRef<
   HTMLDivElement,
   { onInsert: (text: string) => void; triggerRoll?: TriggerRoll | null; onClose: () => void }
 >(function DicePanel({ onInsert, triggerRoll, onClose }, ref) {
+  const { lang } = useLang();
+  const tr = t[lang].play;
   const [count, setCount] = useState(1);
   const [rolling, setRolling] = useState(false);
   const [currentDie, setCurrentDie] = useState<DieType | null>(null);
@@ -827,13 +831,13 @@ const DicePanel = React.forwardRef<
           <circle cx="3.8" cy="8.2" r="1" fill="#b8860b" />
           <circle cx="8.2" cy="8.2" r="1" fill="#b8860b" />
         </svg>
-        Tirar Dados
-        <button className={s.dicePanelClose} onClick={onClose} type="button" aria-label="Cerrar">✕</button>
+        {tr.diceTitle}
+        <button className={s.dicePanelClose} onClick={onClose} type="button" aria-label={tr.diceTitle}>✕</button>
       </div>
 
       {/* Count selector */}
       <div className={s.diceCountRow}>
-        <span className={s.diceCountLabel}>Cantidad</span>
+        <span className={s.diceCountLabel}>{tr.diceCount}</span>
         <div className={s.diceCountControls}>
           <button
             className={s.diceCountBtn}
@@ -878,7 +882,7 @@ const DicePanel = React.forwardRef<
                 onClick={() => onInsert(buildInsertText(finalEntry))}
                 type="button"
               >
-                Insertar
+                {tr.diceInsert}
               </button>
             )}
           </div>
@@ -915,7 +919,7 @@ const DicePanel = React.forwardRef<
 
       {history.length > 1 && (
         <div className={s.rollHistory}>
-          <div className={s.rollHistoryTitle}>Historial</div>
+          <div className={s.rollHistoryTitle}>{tr.diceHistory}</div>
           <div className={s.rollHistoryList}>
             {history.slice(1).map((r) => (
               <span key={r.id} className={s.rollHistoryEntry} title={r.label}>
@@ -948,6 +952,10 @@ interface ActiveVote {
 export default function Play() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { lang } = useLang();
+  const tr = t[lang].play;
+  const settings = t[lang].dashboard.settings as Record<string, string>;
+  const tones    = t[lang].dashboard.tones    as Record<string, string>;
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1419,7 +1427,7 @@ export default function Play() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setSendError(data.error ?? "Error al enviar el mensaje.");
+        setSendError(data.error ?? tr.errSend);
         return;
       }
 
@@ -1459,12 +1467,12 @@ export default function Play() {
         setSendError(data.dm_error);
       }
     } catch {
-      setSendError("Error de conexión. Inténtalo de nuevo.");
+      setSendError(tr.errConn);
     } finally {
       setSending(false);
       setDmThinking(false);
     }
-  }, [input, sending, dmThinking, campaign, activeCharId, userId]);
+  }, [input, sending, dmThinking, campaign, activeCharId, userId, tr]);
 
   // ── Act request ────────────────────────────────────────────
   // Single-player (all characters owned by current user) → act immediately.
@@ -1496,7 +1504,7 @@ export default function Play() {
     setInput("");
 
     const proposerChar = campaign.characters.find((c) => c.id === activeCharId);
-    const character_name = proposerChar?.name ?? "Aventurero";
+    const character_name = proposerChar?.name ?? tr.adventurer;
 
     const voteData: ActiveVote = {
       proposer_id: userId,
@@ -1526,7 +1534,7 @@ export default function Play() {
       event: "vote_start",
       payload: { proposer_id: userId, character_id: activeCharId, character_name, content, voter_ids },
     });
-  }, [input, sending, dmThinking, actCooldown, campaign, activeCharId, userId, handleSend]);
+  }, [input, sending, dmThinking, actCooldown, campaign, activeCharId, userId, handleSend, tr]);
 
   const castVote = useCallback((vote: boolean) => {
     const uid = userIdRef.current;
@@ -1596,7 +1604,7 @@ export default function Play() {
         die: STAT_DIE[stat],
         count: 1,
         modifier: mod,
-        label: `Prueba de ${STAT_ABBR[stat]}`,
+        label: tr.rollStatFmt.replace("{n}", STAT_ABBR[stat]),
       });
     },
     [],
@@ -1787,7 +1795,7 @@ export default function Play() {
         <div className={s.stars} aria-hidden />
         <div className={s.loadingCenter}>
           <div className={s.loadingSpinner} />
-          <span>Preparando la aventura...</span>
+          <span>{tr.loading}</span>
         </div>
       </div>
     );
@@ -1798,9 +1806,9 @@ export default function Play() {
       <div className={s.page}>
         <div className={s.stars} aria-hidden />
         <div className={s.notFound}>
-          <p>Campaña no encontrada.</p>
+          <p>{tr.notFound}</p>
           <button className={s.btnSecondary} onClick={() => router.push("/dashboard")}>
-            Volver al Salón
+            {tr.backToHall}
           </button>
         </div>
       </div>
@@ -1835,15 +1843,13 @@ export default function Play() {
               <line x1="20" y1="11" x2="20" y2="23" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
               <circle cx="20" cy="29" r="2" fill="#b84a4a" />
             </svg>
-            <h2 className={s.kickTitle}>La sesión ha terminado</h2>
-            <p className={s.kickSub}>
-              El Dungeon Master ha abandonado la partida. Pulsa el botón para volver al Salón.
-            </p>
+            <h2 className={s.kickTitle}>{tr.sessionEnded}</h2>
+            <p className={s.kickSub}>{tr.sessionEndedMsg}</p>
             <button
               className={s.kickBtn}
               onClick={() => { loader.start(); router.replace("/dashboard"); }}
             >
-              Volver al Salón ahora
+              {tr.returnBtn}
             </button>
           </div>
         </div>
@@ -1860,7 +1866,7 @@ export default function Play() {
             <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Salón
+          {tr.backToHall}
         </button>
 
         <div className={s.headerDivider} aria-hidden />
@@ -1869,24 +1875,24 @@ export default function Play() {
           <h1 className={s.campaignName}>{campaign.name}</h1>
           <div className={s.headerBadges}>
             <span className={s.badge}>
-              {SETTING_LABELS[campaign.setting] ?? campaign.setting}
+              {settings[campaign.setting] ?? campaign.setting}
             </span>
             <span className={s.badge}>
-              {TONE_LABELS[campaign.tone] ?? campaign.tone}
+              {tones[campaign.tone] ?? campaign.tone}
             </span>
           </div>
         </div>
 
         <div className={s.headerRight}>
           <span className={s.msgCounter}>
-            {messages.length} {messages.length === 1 ? "turno" : "turnos"}
+            {messages.length} {messages.length === 1 ? tr.turnOne : tr.turnMany}
           </span>
           <button
             ref={diceBtnRef}
             className={cx(s.diceBtn, diceOpen && s.diceBtnActive)}
             onClick={() => setDiceOpen((v) => !v)}
             type="button"
-            title="Tirar dados"
+            title={tr.diceBtn}
           >
             <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden>
               <rect x="1.5" y="1.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
@@ -1895,13 +1901,13 @@ export default function Play() {
               <circle cx="5" cy="9" r="1.1" fill="currentColor" />
               <circle cx="9" cy="9" r="1.1" fill="currentColor" />
             </svg>
-            Dados
+            {tr.diceBtn}
           </button>
           <button
             className={s.sidebarToggle}
             onClick={() => setSidebarOpen((v) => !v)}
             type="button"
-            title="Ver grupo"
+            title={tr.partyBtn}
           >
             <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
               <circle cx="5.5" cy="5" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.3" />
@@ -1909,7 +1915,7 @@ export default function Play() {
               <circle cx="11" cy="5" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.3" />
               <path d="M15 14c0-2.5-2-4.5-4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            Grupo
+            {tr.partyBtn}
           </button>
         </div>
       </header>
@@ -1926,7 +1932,7 @@ export default function Play() {
               <line x1="11" y1="1" x2="11" y2="9" stroke="#b8860b" strokeWidth="1.3" strokeLinecap="round" />
               <path d="M3 1 L7 3 L11 1" stroke="#b8860b" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
             </svg>
-            <span>Grupo de Aventureros</span>
+            <span>{tr.partyTitle}</span>
             <span className={s.sidebarCount}>{campaign.characters.length}/4</span>
           </div>
 
@@ -1938,7 +1944,7 @@ export default function Play() {
                   <line x1="14" y1="9" x2="14" y2="16" stroke="#3a2810" strokeWidth="1.8" strokeLinecap="round" />
                   <circle cx="14" cy="19" r="1.2" fill="#3a2810" />
                 </svg>
-                <span>Sin aventureros en la partida</span>
+                <span>{tr.noAdventurers}</span>
               </div>
             ) : (
               campaign.characters.map((char, i) => (
@@ -1977,10 +1983,10 @@ export default function Play() {
                   />
                   <circle cx="23" cy="22" r="5" fill="none" stroke="#3a2810" strokeWidth="1.2" />
                 </svg>
-                <p className={s.emptyTitle}>La aventura aguarda</p>
+                <p className={s.emptyTitle}>{tr.emptyTitle}</p>
                 <p className={s.emptySubtitle}>
-                  Usa <strong>Hablar</strong> para rolplay entre personajes,
-                  o <strong>Actuar</strong> para que el Dungeon Master narre las consecuencias.
+                  {tr.emptyHint1} <strong>{tr.emptySpeak}</strong> {tr.emptyHint2}{" "}
+                  <strong>{tr.emptyAct}</strong> {tr.emptyHint3}
                 </p>
               </div>
             ) : (
@@ -2076,8 +2082,8 @@ export default function Play() {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   activeChar
-                    ? `${activeChar.name} dice o hace...`
-                    : "Escribe una acción o diálogo..."
+                    ? tr.inputPh.replace("{name}", activeChar.name)
+                    : tr.inputPhFallback
                 }
                 disabled={sending || dmThinking}
                 rows={2}
@@ -2089,19 +2095,19 @@ export default function Play() {
                   onClick={() => handleSend(false)}
                   disabled={!input.trim() || sending || dmThinking}
                   type="button"
-                  title="Solo roleplay, sin respuesta del DM"
+                  title={tr.speakBtn}
                 >
                   <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
                     <path d="M2 2h10a1 1 0 011 1v5.5a1 1 0 01-1 1H8.5L6 12V9.5H3a1 1 0 01-1-1V3a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
                   </svg>
-                  Hablar
+                  {tr.speakBtn}
                 </button>
                 <button
                   className={s.btnAct}
                   onClick={handleActRequest}
                   disabled={!input.trim() || sending || dmThinking || actCooldown > 0}
                   type="button"
-                  title="Actuar e invocar al DM (Ctrl+Enter)"
+                  title={tr.actBtn}
                 >
                   {sending && dmThinking ? (
                     <span className={s.btnSpinner} />
@@ -2111,13 +2117,13 @@ export default function Play() {
                       <polyline points="6,3 11,3 11,8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
-                  {sending ? "Enviando..." : actCooldown > 0 ? `${actCooldown}s` : "Actuar"}
+                  {sending ? tr.sending : actCooldown > 0 ? `${actCooldown}s` : tr.actBtn}
                 </button>
               </div>
             </div>
 
             <div className={s.inputHint}>
-              <kbd>Ctrl+Enter</kbd> para actuar · <kbd>Enter</kbd> solo añade línea
+              <kbd>Ctrl+Enter</kbd> {tr.inputHint}
             </div>
           </div>
         </main>

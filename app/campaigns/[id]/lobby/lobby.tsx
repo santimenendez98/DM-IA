@@ -6,6 +6,8 @@ import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
 import { cx } from "@/components/cx";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./lobby.module.css";
 
 interface LobbyCharacter {
@@ -29,27 +31,15 @@ interface LobbyData {
   characters: LobbyCharacter[];
 }
 
-const SETTING_LABELS: Record<string, string> = {
-  fantasy: "Fantasía",
-  "sci-fi": "Ciencia Ficción",
-  horror: "Horror Arcano",
-  cyberpunk: "Cyberpunk",
-  custom: "Personalizado",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  epic: "Épico",
-  dark: "Oscuro",
-  comedic: "Cómico",
-  gritty: "Crudo",
-  whimsical: "Caprichoso",
-};
-
 const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880"] as const;
 
 export default function Lobby() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { lang } = useLang();
+  const tr       = t[lang].lobby;
+  const settings = t[lang].dashboard.settings as Record<string, string>;
+  const tones    = t[lang].dashboard.tones    as Record<string, string>;
 
   const [campaign, setCampaign] = useState<LobbyData | null>(null);
   const [userId, setUserId]     = useState<string>("");
@@ -244,7 +234,7 @@ export default function Lobby() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setStartError(data.error ?? "Error al iniciar la aventura.");
+        setStartError(data.error ?? tr.errStart);
         setStarting(false);
         return;
       }
@@ -291,7 +281,7 @@ export default function Lobby() {
         <div className={s.stars} aria-hidden />
         <div className={s.loadingCenter}>
           <div className={s.loadingSpinner} />
-          <span>Reuniendo al grupo...</span>
+          <span>{tr.loading}</span>
         </div>
       </div>
     );
@@ -302,9 +292,9 @@ export default function Lobby() {
       <div className={s.page}>
         <div className={s.stars} aria-hidden />
         <div className={s.notFound}>
-          <p>Campaña no encontrada o sin acceso.</p>
+          <p>{tr.notFound}</p>
           <button className={s.btnSecondary} onClick={() => router.push("/dashboard")}>
-            Volver al Salón
+            {tr.returnBtn}
           </button>
         </div>
       </div>
@@ -326,13 +316,13 @@ export default function Lobby() {
               <line x1="18" y1="11" x2="18" y2="20" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
               <circle cx="18" cy="25" r="1.5" fill="#b84a4a" />
             </svg>
-            <h2 className={s.abandonedTitle}>El Dungeon Master ha cerrado la sala</h2>
-            <p className={s.abandonedSub}>La sesión fue cancelada. Vuelve al salón para unirte a otra aventura.</p>
+            <h2 className={s.abandonedTitle}>{tr.abandonedTitle}</h2>
+            <p className={s.abandonedSub}>{tr.abandonedSub}</p>
             <button
               className={s.btnStart}
               onClick={() => { loader.start(); router.push("/dashboard"); }}
             >
-              Volver al Salón
+              {tr.returnBtn}
             </button>
           </div>
         </div>
@@ -350,17 +340,14 @@ export default function Lobby() {
               />
               <line x1="13" y1="13" x2="27" y2="27" stroke="#b84a4a" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
-            <h2 className={s.expelledTitle}>Has sido expulsado del grupo</h2>
-            <p className={s.expelledSub}>
-              El Dungeon Master te ha retirado de esta campaña.<br />
-              Vuelve al salón para explorar otras aventuras.
-            </p>
+            <h2 className={s.expelledTitle}>{tr.expelledTitle}</h2>
+            <p className={s.expelledSub}>{tr.expelledSub}</p>
             <button
               className={s.btnStart}
               onClick={() => { loader.start(); router.push("/dashboard"); }}
               type="button"
             >
-              Volver al Salón
+              {tr.returnBtn}
             </button>
           </div>
         </div>
@@ -375,17 +362,14 @@ export default function Lobby() {
               <line x1="12" y1="12" x2="28" y2="28" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
               <line x1="28" y1="12" x2="12" y2="28" stroke="#b84a4a" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            <h2 className={s.expelledTitle}>La campaña ha sido eliminada</h2>
-            <p className={s.expelledSub}>
-              El Dungeon Master ha disuelto esta campaña.<br />
-              Vuelve al salón para explorar otras aventuras.
-            </p>
+            <h2 className={s.expelledTitle}>{tr.deletedTitle}</h2>
+            <p className={s.expelledSub}>{tr.deletedSub}</p>
             <button
               className={s.btnStart}
               onClick={() => { loader.start(); router.push("/dashboard"); }}
               type="button"
             >
-              Volver al Salón
+              {tr.returnBtn}
             </button>
           </div>
         </div>
@@ -402,7 +386,7 @@ export default function Lobby() {
             <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Salón
+          {tr.back}
         </button>
 
         <div className={s.headerDivider} aria-hidden />
@@ -410,8 +394,8 @@ export default function Lobby() {
         <div className={s.headerCenter}>
           <h1 className={s.campaignName}>{campaign.name}</h1>
           <div className={s.headerBadges}>
-            <span className={s.badge}>{SETTING_LABELS[campaign.setting] ?? campaign.setting}</span>
-            <span className={s.badge}>{TONE_LABELS[campaign.tone] ?? campaign.tone}</span>
+            <span className={s.badge}>{settings[campaign.setting] ?? campaign.setting}</span>
+            <span className={s.badge}>{tones[campaign.tone] ?? campaign.tone}</span>
           </div>
         </div>
 
@@ -420,7 +404,7 @@ export default function Lobby() {
             className={s.manageBtn}
             onClick={() => { loader.start(); router.push(`/campaigns/${id}`); }}
             type="button"
-            title="Gestionar campaña"
+            title={tr.manage}
           >
             <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden>
               <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
@@ -430,7 +414,7 @@ export default function Lobby() {
               <line x1="1.5" y1="7" x2="4"   y2="7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
               <line x1="10" y1="7" x2="12.5" y2="7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            Gestionar
+            {tr.manage}
           </button>
         )}
       </header>
@@ -448,11 +432,9 @@ export default function Lobby() {
               />
               <circle cx="16" cy="15" r="4" fill="none" stroke="#e8c040" strokeWidth="1.2" opacity="0.6" />
             </svg>
-            <h2 className={s.lobbyTitle}>Antesala de la Aventura</h2>
+            <h2 className={s.lobbyTitle}>{tr.title}</h2>
             <p className={s.lobbySubtitle}>
-              {isDM
-                ? "Cuando todos estén listos, comienza la partida."
-                : "Aguarda en la antesala. El Dungeon Master dará la señal."}
+              {isDM ? tr.subtitleDm : tr.subtitlePlayer}
             </p>
           </div>
 
@@ -465,7 +447,7 @@ export default function Lobby() {
                 <line x1="11" y1="1" x2="11" y2="9" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
                 <path d="M3 1 L7 3 L11 1" stroke="#b8860b" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
               </svg>
-              Grupo de Aventureros
+              {tr.groupTitle}
               <span className={s.partyCount}>{campaign.characters.length} / 4</span>
             </div>
 
@@ -475,7 +457,7 @@ export default function Lobby() {
                   <circle cx="18" cy="12" r="6" fill="none" stroke="#3a2810" strokeWidth="1.5" />
                   <path d="M6 32c0-6.6 5.4-12 12-12s12 5.4 12 12" fill="none" stroke="#3a2810" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                <p>Aún no hay aventureros en esta campaña.</p>
+                <p>{tr.emptyParty}</p>
               </div>
             ) : (
               <div className={s.partyGrid}>
@@ -496,14 +478,14 @@ export default function Lobby() {
                           <div className={s.charName}>{char.name}</div>
                           <div className={s.charMeta}>
                             <span className={s.charBadge}>{char.class}</span>
-                            <span className={s.charBadge}>Nv.{char.level}</span>
+                            <span className={s.charBadge}>{tr.levelAbbr}{char.level}</span>
                           </div>
                         </div>
-                        {isMe && <span className={s.meBadge}>Tú</span>}
+                        {isMe && <span className={s.meBadge}>{tr.you}</span>}
                       </div>
 
                       <div className={s.charHpRow}>
-                        <span className={s.charHpLabel}>PV</span>
+                        <span className={s.charHpLabel}>{tr.hpAbbr}</span>
                         <div className={s.charHpBar}>
                           <div
                             className={cx(
@@ -521,7 +503,7 @@ export default function Lobby() {
                           s.readyDot,
                           onlineUsers.has(char.user_id) ? s.readyDotOnline : s.readyDotOffline,
                         )} />
-                        {onlineUsers.has(char.user_id) ? "En el lobby" : "Fuera de línea"}
+                        {onlineUsers.has(char.user_id) ? tr.online : tr.offline}
                       </div>
                     </div>
                   );
@@ -548,20 +530,20 @@ export default function Lobby() {
                   </svg>
                 )}
                 {starting
-                  ? "Iniciando..."
+                  ? tr.dmStarting
                   : campaign.started_at
-                  ? "Continuar aventura"
-                  : "Comenzar aventura"}
+                  ? tr.dmContinue
+                  : tr.dmStart}
               </button>
 
               {campaign.characters.length === 0 && (
-                <p className={s.dmHint}>Necesitas al menos un aventurero para comenzar.</p>
+                <p className={s.dmHint}>{tr.dmHintNoChars}</p>
               )}
               {campaign.characters.length > 0 && isMultiplayer && !allPlayersOnline && (
                 <p className={s.dmHint}>
                   {missingPlayers.length === 1
-                    ? "Falta 1 jugador por conectarse al lobby."
-                    : `Faltan ${missingPlayers.length} jugadores por conectarse al lobby.`}
+                    ? tr.dmHintMissingOne
+                    : tr.dmHintMissingFmt.replace("{n}", String(missingPlayers.length))}
                 </p>
               )}
             </div>
@@ -574,9 +556,7 @@ export default function Lobby() {
                 <span /><span /><span />
               </div>
               <span className={s.waitingText}>
-                {campaign.started_at
-                  ? "La aventura ha comenzado. Entrando..."
-                  : "Esperando al Dungeon Master..."}
+                {campaign.started_at ? tr.playerEntering : tr.playerWaiting}
               </span>
             </div>
           )}

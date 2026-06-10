@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { UpdateCharacterInput, CharacterStats } from "@/types/character";
+import type { UpdateCharacterInput, CharacterStats, CharacterSpell } from "@/types/character";
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -114,9 +114,10 @@ export async function PATCH(
     max_hp,
     stats,
     backstory,
-  } = body as Partial<UpdateCharacterInput>;
+    spells_known,
+  } = body as Partial<UpdateCharacterInput> & { spells_known?: CharacterSpell[] };
 
-  const providedFields = [name, charClass, level, hp, max_hp, stats, backstory];
+  const providedFields = [name, charClass, level, hp, max_hp, stats, backstory, spells_known];
   if (providedFields.every((v) => v === undefined)) {
     return NextResponse.json(
       { error: "Se requiere al menos un campo para actualizar." },
@@ -171,13 +172,16 @@ export async function PATCH(
 
   // Build patch with only the fields that were explicitly sent.
   const patch: Record<string, unknown> = {};
-  if (name !== undefined)      patch.name      = name.trim();
-  if (charClass !== undefined) patch.class     = charClass.trim();
-  if (level !== undefined)     patch.level     = level;
-  if (hp !== undefined)        patch.hp        = hp;
-  if (max_hp !== undefined)    patch.max_hp    = max_hp;
-  if (stats !== undefined)     patch.stats     = stats;
-  if (backstory !== undefined) patch.backstory = backstory?.trim() ?? null;
+  if (name !== undefined)         patch.name         = name.trim();
+  if (charClass !== undefined)    patch.class        = charClass.trim();
+  if (level !== undefined)        patch.level        = level;
+  if (hp !== undefined)           patch.hp           = hp;
+  if (max_hp !== undefined)       patch.max_hp       = max_hp;
+  if (stats !== undefined)        patch.stats        = stats;
+  if (backstory !== undefined)    patch.backstory    = backstory?.trim() ?? null;
+  if (spells_known !== undefined) patch.spells_known = Array.isArray(spells_known) ? spells_known : [];
+  // Leveling up consumes the DM's authorization
+  if (level !== undefined)        patch.level_up_authorized = false;
 
   const { data, error } = await supabase
     .from("characters")

@@ -292,6 +292,93 @@
 }
 .slotRemove:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Level-up authorization (DM controls) ─────────────────────── */
+
+.slotAuthBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: calc(100% - 20px);
+  margin: 4px 10px 8px;
+  padding: 5px 8px;
+  background: transparent;
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.slotAuthBtn:hover:not(:disabled) {
+  border-color: #b8860b;
+  color: #e8c040;
+  background: rgba(184,134,11,0.08);
+}
+.slotAuthBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.slotAuthBtnActive {
+  border-color: #4a7a50 !important;
+  color: #6aaa70 !important;
+  background: rgba(74,122,80,0.1) !important;
+}
+.slotAuthBtnActive:hover:not(:disabled) {
+  border-color: #7a2020 !important;
+  color: #c07070 !important;
+  background: rgba(122,32,32,0.1) !important;
+}
+
+.levelUpBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 4px 10px 8px;
+  padding: 4px 8px;
+  background: rgba(184,134,11,0.1);
+  border: 1px solid rgba(184,134,11,0.3);
+  border-radius: 2px;
+  color: #e8c040;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  animation: lvlPulse 2s ease-in-out infinite;
+}
+
+@keyframes lvlPulse {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1; box-shadow: 0 0 8px rgba(184,134,11,0.3); }
+}
+
+.authAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid #3a2808;
+  border-radius: 2px;
+  color: #6b5535;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.authAllBtn:hover:not(:disabled) { border-color: #b8860b; color: #e8c040; background: rgba(184,134,11,0.08); }
+.authAllBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* ── Empty slots ─────────────────────────────────────────────── */
 
 .slotEmpty {
@@ -408,7 +495,24 @@
 }
 .dropOption:last-child { border-bottom: none; }
 .dropOption:hover:not(:disabled) { background: rgba(184,134,11,0.08); }
-.dropOption:disabled { opacity: 0.5; cursor: not-allowed; }
+.dropOption:disabled { opacity: 1; cursor: not-allowed; }
+
+.dropOptionBlocked {
+  background: rgba(80,60,160,0.04) !important;
+  border-bottom-color: rgba(80,60,160,0.1) !important;
+}
+.dropOptionBlocked .dropName { color: #6a5898 !important; }
+
+.dropWarn {
+  color: #6050a0;
+  font-style: italic;
+}
+
+.dropBlockIcon {
+  flex-shrink: 0;
+  color: #6050a0;
+  margin-left: auto;
+}
 
 .dropAvatar {
   width: 30px;

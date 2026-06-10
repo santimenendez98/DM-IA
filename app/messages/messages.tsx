@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./messages.module.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -33,12 +35,12 @@ interface Preview {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function timeLabel(iso: string): string {
+function timeLabel(iso: string, locale: string): string {
   const d = new Date(iso);
   const now = new Date();
-  const hm = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  const hm = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   if (d.toDateString() === now.toDateString()) return hm;
-  return `${d.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · ${hm}`;
+  return `${d.toLocaleDateString(locale, { day: "numeric", month: "short" })} · ${hm}`;
 }
 
 const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880", "#b8924a", "#4ab8b8"] as const;
@@ -59,6 +61,8 @@ export default function Messages() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const campaignParam = searchParams.get("campaign");
+  const { lang } = useLang();
+  const tr = t[lang].messages;
 
   const [campaigns, setCampaigns]         = useState<Campaign[]>([]);
   const [selectedId, setSelectedId]       = useState<string | null>(null);
@@ -257,9 +261,9 @@ export default function Messages() {
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
                 <path d="M7 1L3 5L7 9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Taberna
+              {tr.back}
             </button>
-            <span className={s.sidebarTitle}>Mensajes</span>
+            <span className={s.sidebarTitle}>{tr.title}</span>
           </div>
 
           <div className={s.campaignList}>
@@ -268,7 +272,7 @@ export default function Messages() {
                   <div key={i} className={s.skeleton} style={{ height: 54, margin: "4px 10px", borderRadius: 3 }} />
                 ))
               : campaigns.length === 0
-              ? <div className={s.emptySidebar}>No perteneces a ninguna campaña.</div>
+              ? <div className={s.emptySidebar}>{tr.noCampaigns}</div>
               : campaigns.map((c) => {
                   const preview = previews.get(c.id);
                   return (
@@ -282,7 +286,7 @@ export default function Messages() {
                       <div className={s.campaignItemSub}>
                         {preview
                           ? <><span className={s.previewUser}>{preview.username}:</span> {truncate(preview.content, 38)}</>
-                          : "Sin mensajes"}
+                          : tr.noMessages}
                       </div>
                     </button>
                   );
@@ -300,7 +304,7 @@ export default function Messages() {
                 <line x1="11" y1="16" x2="29" y2="16" stroke="#3a2808" strokeWidth="1.3" strokeLinecap="round" />
                 <line x1="11" y1="21" x2="23" y2="21" stroke="#3a2808" strokeWidth="1.3" strokeLinecap="round" />
               </svg>
-              <p>Selecciona una campaña para ver los mensajes.</p>
+              <p>{tr.noSelected}</p>
             </div>
           ) : (
             <>
@@ -310,12 +314,12 @@ export default function Messages() {
                     className={s.mobileChatBack}
                     type="button"
                     onClick={() => setSelectedId(null)}
-                    aria-label="Volver a campañas"
+                    aria-label={tr.backAriaLabel}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
                       <path d="M7 1L3 5L7 9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    Volver
+                    {tr.backToList}
                   </button>
                   <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
                     <rect x="1" y="2" width="12" height="8" rx="1.5" fill="none" stroke="#c9a030" strokeWidth="1.2" />
@@ -340,7 +344,7 @@ export default function Messages() {
                       <line x1="10" y1="14" x2="26" y2="14" stroke="#3a2808" strokeWidth="1.2" strokeLinecap="round" />
                       <line x1="10" y1="19" x2="20" y2="19" stroke="#3a2808" strokeWidth="1.2" strokeLinecap="round" />
                     </svg>
-                    <p>El pergamino está en blanco. Sé el primero en escribir.</p>
+                    <p>{tr.emptyChat}</p>
                   </div>
                 ) : (
                   messages.map((msg, i) => {
@@ -364,7 +368,7 @@ export default function Messages() {
                             <span className={`${s.msgUser}${isOwn ? ` ${s.msgUserOwn}` : ""}`}>
                               {msg.username}
                             </span>
-                            <span className={s.msgTime}>{timeLabel(msg.created_at)}</span>
+                            <span className={s.msgTime}>{timeLabel(msg.created_at, tr.locale)}</span>
                           </div>
                         )}
                         <div className={`${s.msgContent}${grouped ? ` ${s.msgContentGrouped}` : ""}`}>
@@ -380,7 +384,7 @@ export default function Messages() {
                 <textarea
                   ref={inputRef}
                   className={s.input}
-                  placeholder="Escribe un mensaje… (Enter para enviar, Shift+Enter para nueva línea)"
+                  placeholder={tr.inputPh}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -394,7 +398,7 @@ export default function Messages() {
                   className={s.sendBtn}
                   onClick={sendMessage}
                   disabled={!input.trim() || sending}
-                  aria-label="Enviar mensaje"
+                  aria-label={tr.sendAriaLabel}
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
                     <path d="M1 7L13 1.5L9 7L13 12.5Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />

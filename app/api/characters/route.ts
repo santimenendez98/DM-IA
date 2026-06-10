@@ -96,6 +96,11 @@ export async function POST(req: Request) {
     stats,
     backstory,
     image_url,
+    race,
+    background,
+    alignment,
+    skill_proficiencies,
+    items,
   } = body as Partial<CreateCharacterInput>;
 
   const fieldErrors: Record<string, string> = {};
@@ -167,6 +172,11 @@ export async function POST(req: Request) {
       stats: stats ?? DEFAULT_STATS,
       backstory: backstory?.trim() ?? null,
       image_url: safeImageUrl,
+      race: race?.trim() ?? null,
+      background: background?.trim() ?? null,
+      alignment: alignment?.trim() ?? null,
+      skill_proficiencies: Array.isArray(skill_proficiencies) ? skill_proficiencies : [],
+      items: Array.isArray(items) ? items : [],
     })
     .select()
     .single();

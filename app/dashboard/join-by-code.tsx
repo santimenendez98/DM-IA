@@ -4,6 +4,10 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { loader } from "@/lib/loader";
 import type { Character } from "@/types/character";
+import { cx } from "@/components/cx";
+import { KNOWN_CASTERS } from "@/app/data/spells";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./join-by-code.module.css";
 
 interface Props {
@@ -14,8 +18,17 @@ interface Props {
 
 type Step = "form" | "success";
 
+function needsSpellSetup(c: Character): boolean {
+  return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
+}
+
 export default function JoinByCode({ open, onClose, onJoined }: Props) {
   const router = useRouter();
+  const { lang } = useLang();
+  const tr         = t[lang].dashboard.joinByCode;
+  const classNames = t[lang].character.classNames as unknown as Record<string, string>;
+  const levelAbbr  = t[lang].dashboard.levelAbbr;
+
   const [characters, setCharacters] = useState<Character[]>([]);
   const [code, setCode]             = useState("");
   const [charId, setCharId]         = useState("");
@@ -35,15 +48,23 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
       .then((r) => r.ok ? r.json() : [])
       .then((data: Character[]) => {
         setCharacters(data);
-        setCharId(data[0]?.id ?? "");
+        setCharId(data.find((c) => !needsSpellSetup(c))?.id ?? data[0]?.id ?? "");
       })
       .catch(() => {});
   }, [open]);
 
+  const selectedChar = characters.find((c) => c.id === charId);
+  const canJoin = !submitting && characters.length > 0 && code.length >= 6 && !!selectedChar && !needsSpellSetup(selectedChar);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { setError("Ingresa el código de sala."); return; }
-    if (!charId)      { setError("Selecciona un personaje."); return; }
+    if (!code.trim()) { setError(tr.errNoCode); return; }
+    if (!charId)      { setError(tr.errNoChar); return; }
+    const sel = characters.find((c) => c.id === charId);
+    if (sel && needsSpellSetup(sel)) {
+      setError(tr.errSpells);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -55,7 +76,7 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
       });
       const data = await res.json().catch(() => ({})) as { campaign_name?: string; campaign_id?: string; error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Error al unirse a la campaña.");
+        setError(data.error ?? tr.errGeneric);
         return;
       }
       setCampaignName(data.campaign_name ?? "la campaña");
@@ -63,11 +84,11 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
       setStep("success");
       onJoined?.();
     } catch {
-      setError("Error de conexión.");
+      setError(tr.errConn);
     } finally {
       setSubmitting(false);
     }
-  }, [code, charId, onJoined]);
+  }, [code, charId, characters, onJoined]);
 
   if (!open) return null;
 
@@ -83,7 +104,7 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
               <path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
               <circle cx="8" cy="11.5" r="1.3" fill="#e8c040" />
             </svg>
-            <span className={s.title}>Unirse con Código</span>
+            <span className={s.title}>{tr.title}</span>
           </div>
           <button className={s.closeBtn} onClick={onClose} type="button" aria-label="Cerrar">
             <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
@@ -96,13 +117,11 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
         <div className={s.body}>
           {step === "form" ? (
             <form onSubmit={handleSubmit} noValidate>
-              <p className={s.hint}>
-                Ingresa el código de 6 caracteres que te compartió el Dungeon Master de la campaña.
-              </p>
+              <p className={s.hint}>{tr.hint}</p>
 
               {/* Code input */}
               <div className={s.field}>
-                <label className={s.label} htmlFor="jbc-code">Código de sala</label>
+                <label className={s.label} htmlFor="jbc-code">{tr.codeLabel}</label>
                 <input
                   id="jbc-code"
                   className={s.codeInput}
@@ -116,26 +135,57 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                 />
               </div>
 
-              {/* Character select */}
+              {/* Character list */}
               <div className={s.field}>
-                <label className={s.label} htmlFor="jbc-char">Personaje con el que te unes</label>
+                <label className={s.label}>{tr.charLabel}</label>
                 {characters.length === 0 ? (
-                  <p className={s.noChars}>
-                    Necesitas crear un personaje primero para poder unirte a una campaña.
-                  </p>
+                  <p className={s.noChars}>{tr.noChars}</p>
                 ) : (
-                  <select
-                    id="jbc-char"
-                    className={s.select}
-                    value={charId}
-                    onChange={(e) => setCharId(e.target.value)}
-                  >
-                    {characters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — {c.class} Nv.{c.level}
-                      </option>
-                    ))}
-                  </select>
+                  <div className={s.charList}>
+                    {characters.map((c) => {
+                      const blocked = needsSpellSetup(c);
+                      const selected = charId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={cx(
+                            s.charOption,
+                            selected && s.charOptionSelected,
+                            blocked && s.charOptionBlocked,
+                          )}
+                          onClick={() => !blocked && setCharId(c.id)}
+                          disabled={blocked}
+                          title={blocked ? tr.spellsTooltip : undefined}
+                        >
+                          <div className={s.charAvatar}>
+                            {c.image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={c.image_url} alt={c.name} className={s.charAvatarImg} />
+                            ) : c.name[0].toUpperCase()}
+                          </div>
+                          <div className={s.charInfo}>
+                            <div className={s.charName}>{c.name}</div>
+                            <div className={s.charMeta}>
+                              {classNames[c.class] ?? c.class} · {levelAbbr}{c.level}
+                              {blocked && <span className={s.charWarn}> {tr.spellsWarn}</span>}
+                            </div>
+                          </div>
+                          {blocked ? (
+                            <svg width="13" height="13" viewBox="0 0 13 13" className={s.charBlockIcon} aria-hidden>
+                              <path d="M6.5 1.5 C6.5 1.5 11 4 11 7 Q11 10.5 6.5 11.5 Q2 10.5 2 7 C2 4 6.5 1.5 6.5 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.3"/>
+                              <line x1="6.5" y1="4.5" x2="6.5" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                              <circle cx="6.5" cy="9.5" r="0.7" fill="currentColor"/>
+                            </svg>
+                          ) : selected ? (
+                            <svg width="12" height="12" viewBox="0 0 12 12" className={s.charCheckIcon} aria-hidden>
+                              <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -148,14 +198,14 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                   onClick={onClose}
                   disabled={submitting}
                 >
-                  Cancelar
+                  {tr.cancel}
                 </button>
                 <button
                   type="submit"
                   className={s.joinBtn}
-                  disabled={submitting || characters.length === 0 || code.length < 6}
+                  disabled={!canJoin}
                 >
-                  {submitting ? "Uniéndose..." : "✦ Unirse"}
+                  {submitting ? tr.joining : tr.joinBtn}
                 </button>
               </div>
             </form>
@@ -168,14 +218,14 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                     strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h2 className={s.successTitle}>¡Bienvenido al grupo!</h2>
+              <h2 className={s.successTitle}>{tr.successTitle}</h2>
               <p className={s.successMsg}>
-                Te has unido a <strong>{campaignName}</strong>.<br />
-                Entra a la sala de espera para aguardar al Dungeon Master.
+                <strong>{tr.successMsgFmt.replace("{n}", campaignName)}</strong><br />
+                {tr.successSub}
               </p>
               <div className={s.successActions}>
                 <button className={s.cancelBtn} onClick={onClose} type="button">
-                  Cerrar
+                  {tr.close}
                 </button>
                 <button
                   className={s.joinBtn}
@@ -186,7 +236,7 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                   }}
                   type="button"
                 >
-                  Ir a la Sala →
+                  {tr.goToRoom}
                 </button>
               </div>
             </div>

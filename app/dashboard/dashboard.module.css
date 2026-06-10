@@ -718,6 +718,33 @@
   letter-spacing: 0.05em;
 }
 
+.charNotifLevelUp,
+.charNotifSpells {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.charNotifLevelUp {
+  background: rgba(30, 20, 4, 0.85);
+  border: 1px solid #b8860b;
+  color: #e0c050;
+}
+
+.charNotifSpells {
+  background: rgba(20, 10, 35, 0.85);
+  border: 1px solid #7a4aaa;
+  color: #c090e8;
+}
+
 /* ── Joined campaign characters ─────────────────────────────── */
 
 .joinedChars {

@@ -2,27 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import type { Character } from "@/types/character";
-import type { GuildCampaign, JoinRequest } from "@/types/join-request";
+import type { GuildCampaign } from "@/types/join-request";
 import { cx } from "@/components/cx";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./guild-explorer.module.css";
-
-// ── Label maps ─────────────────────────────────────────────────
-
-const SETTING_LABELS: Record<string, string> = {
-  fantasy: "Fantasía",
-  "sci-fi": "Ciencia Ficción",
-  horror: "Horror Arcano",
-  cyberpunk: "Cyberpunk",
-  custom: "Personalizado",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  epic: "Épico",
-  dark: "Oscuro",
-  comedic: "Cómico",
-  gritty: "Crudo",
-  whimsical: "Caprichoso",
-};
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -39,6 +23,12 @@ interface Props {
 // ── Component ──────────────────────────────────────────────────
 
 export default function GuildExplorer({ open, onClose }: Props) {
+  const { lang } = useLang();
+  const tr         = t[lang].guild;
+  const settings   = t[lang].dashboard.settings  as Record<string, string>;
+  const tones      = t[lang].dashboard.tones      as Record<string, string>;
+  const classNames = t[lang].character.classNames as unknown as Record<string, string>;
+
   const [campaigns, setCampaigns]     = useState<GuildCampaign[]>([]);
   const [characters, setCharacters]   = useState<Character[]>([]);
   const [loading, setLoading]         = useState(false);
@@ -58,14 +48,14 @@ export default function GuildExplorer({ open, onClose }: Props) {
         fetch("/api/characters"),
       ]);
       if (guildRes.ok)  setCampaigns(await guildRes.json());
-      else              setLoadError("No se pudo cargar el gremio.");
+      else              setLoadError(t[lang].guild.loadError);
       if (charsRes.ok)  setCharacters(await charsRes.json());
     } catch {
-      setLoadError("Error de conexión.");
+      setLoadError(t[lang].guild.connError);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     if (open) {
@@ -102,7 +92,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
   const submitRequest = useCallback(
     async (campaignId: string) => {
       if (!form.characterId) {
-        setSubmitError("Debes seleccionar un personaje.");
+        setSubmitError(t[lang].guild.errNoChar);
         return;
       }
       setSubmitting(true);
@@ -118,7 +108,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
         });
         const data = await res.json().catch(() => ({})) as { id?: string; error?: string };
         if (!res.ok) {
-          setSubmitError(data.error ?? "Error al enviar la solicitud.");
+          setSubmitError(data.error ?? t[lang].guild.errGeneral);
           return;
         }
         setCampaigns((prev) =>
@@ -130,12 +120,12 @@ export default function GuildExplorer({ open, onClose }: Props) {
         );
         setRequestingId(null);
       } catch {
-        setSubmitError("Error de conexión.");
+        setSubmitError(t[lang].guild.connError);
       } finally {
         setSubmitting(false);
       }
     },
-    [form],
+    [form, lang],
   );
 
   const cancelRequest = useCallback(async (campaignId: string) => {
@@ -162,9 +152,9 @@ export default function GuildExplorer({ open, onClose }: Props) {
               <path d="M9 2L11 7H17L12 10.5L14 16L9 12.5L4 16L6 10.5L1 7H7Z"
                 fill="none" stroke="#b8860b" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
-            <span className={s.title}>Explorador del Gremio</span>
+            <span className={s.title}>{tr.title}</span>
           </div>
-          <button className={s.closeBtn} onClick={onClose} type="button" aria-label="Cerrar">
+          <button className={s.closeBtn} onClick={onClose} type="button" aria-label={tr.ariaClose}>
             <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
               <line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -172,9 +162,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
           </button>
         </div>
 
-        <div className={s.subheader}>
-          Explora las aventuras de otros viajeros y solicita unirte a su grupo.
-        </div>
+        <div className={s.subheader}>{tr.subheader}</div>
 
         {/* Body */}
         <div className={s.body}>
@@ -197,7 +185,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
                 <line x1="22" y1="13" x2="22" y2="25" stroke="#3a2810" strokeWidth="2" strokeLinecap="round" />
                 <circle cx="22" cy="30" r="1.5" fill="#3a2810" />
               </svg>
-              <p>No hay otras campañas disponibles en el gremio todavía.</p>
+              <p>{tr.emptyState}</p>
             </div>
           )}
 
@@ -217,10 +205,10 @@ export default function GuildExplorer({ open, onClose }: Props) {
 
                       <div className={s.cardBadges}>
                         <span className={s.badge}>
-                          {SETTING_LABELS[campaign.setting] ?? campaign.setting}
+                          {settings[campaign.setting] ?? campaign.setting}
                         </span>
                         <span className={s.badge}>
-                          {TONE_LABELS[campaign.tone] ?? campaign.tone}
+                          {tones[campaign.tone] ?? campaign.tone}
                         </span>
                       </div>
 
@@ -235,30 +223,30 @@ export default function GuildExplorer({ open, onClose }: Props) {
                           ))}
                         </div>
                         <span className={s.partyLabel}>
-                          {campaign.party_size}/4 aventureros
+                          {tr.partySizeFmt.replace("{n}", String(campaign.party_size))}
                         </span>
                       </div>
 
                       {campaign.started_at && (
-                        <span className={s.statusBadge}>En curso</span>
+                        <span className={s.statusBadge}>{tr.statusInProgress}</span>
                       )}
                     </div>
 
                     {/* Action area */}
                     <div className={s.cardAction}>
                       {isFull && !req && (
-                        <span className={s.fullBadge}>Grupo completo</span>
+                        <span className={s.fullBadge}>{tr.groupFull}</span>
                       )}
 
                       {req?.status === "pending" && (
                         <div className={s.pendingRow}>
-                          <span className={s.pendingBadge}>Solicitud enviada</span>
+                          <span className={s.pendingBadge}>{tr.requestSent}</span>
                           <button
                             className={s.cancelBtn}
                             onClick={() => cancelRequest(campaign.id)}
                             type="button"
                           >
-                            Cancelar
+                            {tr.cancelBtn}
                           </button>
                         </div>
                       )}
@@ -270,19 +258,19 @@ export default function GuildExplorer({ open, onClose }: Props) {
                             <path d="M3 5.5l2 2 3-3.5" stroke="#4a9a5a" strokeWidth="1.2" fill="none"
                               strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          Ya eres miembro
+                          {tr.alreadyMember}
                         </span>
                       )}
 
                       {req?.status === "rejected" && (
                         <div className={s.rejectedRow}>
-                          <span className={s.rejectedBadge}>Solicitud rechazada</span>
+                          <span className={s.rejectedBadge}>{tr.requestRejected}</span>
                           <button
                             className={s.joinBtn}
                             onClick={() => openForm(campaign.id)}
                             type="button"
                           >
-                            Volver a solicitar
+                            {tr.reRequest}
                           </button>
                         </div>
                       )}
@@ -293,18 +281,16 @@ export default function GuildExplorer({ open, onClose }: Props) {
                           onClick={() => openForm(campaign.id)}
                           type="button"
                         >
-                          Solicitar unirse →
+                          {tr.requestJoin}
                         </button>
                       )}
 
                       {/* Inline request form */}
                       {isRequesting && (
                         <div className={s.form}>
-                          <div className={s.formLabel}>Personaje con el que te unes</div>
+                          <div className={s.formLabel}>{tr.formCharLabel}</div>
                           {characters.length === 0 ? (
-                            <p className={s.formHint}>
-                              Necesitas crear un personaje antes de unirte a una campaña.
-                            </p>
+                            <p className={s.formHint}>{tr.formNoChars}</p>
                           ) : (
                             <select
                               className={s.select}
@@ -315,15 +301,15 @@ export default function GuildExplorer({ open, onClose }: Props) {
                             >
                               {characters.map((c) => (
                                 <option key={c.id} value={c.id}>
-                                  {c.name} — {c.class} Nv.{c.level}
+                                  {c.name} — {classNames[c.class] ?? c.class} {tr.levelAbbr}{c.level}
                                 </option>
                               ))}
                             </select>
                           )}
 
                           <div className={s.formLabel} style={{ marginTop: 10 }}>
-                            Mensaje para el DM{" "}
-                            <span className={s.optional}>— opcional</span>
+                            {tr.formMsgLabel}{" "}
+                            <span className={s.optional}>{tr.formOptional}</span>
                           </div>
                           <textarea
                             className={s.textarea}
@@ -331,7 +317,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
                             onChange={(e) =>
                               setForm((f) => ({ ...f, message: e.target.value }))
                             }
-                            placeholder="Preséntate o describe tu personaje..."
+                            placeholder={tr.formMsgPh}
                             rows={3}
                             maxLength={300}
                           />
@@ -347,7 +333,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
                               disabled={submitting}
                               type="button"
                             >
-                              Cancelar
+                              {tr.cancelBtn}
                             </button>
                             <button
                               className={s.joinBtn}
@@ -355,7 +341,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
                               disabled={submitting || characters.length === 0}
                               type="button"
                             >
-                              {submitting ? "Enviando..." : "Enviar solicitud"}
+                              {submitting ? tr.submitting : tr.submitBtn}
                             </button>
                           </div>
                         </div>
