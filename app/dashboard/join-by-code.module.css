@@ -146,6 +146,112 @@
 .select:focus { border-color: #7a5c1e; }
 .select option { background: #1a1208; }
 
+/* ── Character list ── */
+
+.charList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3e2e10;
+  border-radius: 3px;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.charList::-webkit-scrollbar { width: 4px; }
+.charList::-webkit-scrollbar-track { background: transparent; }
+.charList::-webkit-scrollbar-thumb { background: #3e2e10; border-radius: 2px; }
+
+.charOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(184,134,11,0.08);
+  color: #c9a888;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+  box-sizing: border-box;
+}
+.charOption:last-child { border-bottom: none; }
+.charOption:hover:not(:disabled) { background: rgba(184,134,11,0.08); }
+.charOption:disabled { opacity: 1; cursor: not-allowed; }
+
+.charOptionSelected {
+  background: rgba(184,134,11,0.1) !important;
+  border-left: 2px solid #b8860b;
+  padding-left: 12px;
+}
+
+.charOptionBlocked {
+  background: rgba(80,60,160,0.04) !important;
+  border-bottom-color: rgba(80,60,160,0.1) !important;
+}
+.charOptionBlocked .charName { color: #6a5898 !important; }
+
+.charAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7a1010, #3a0606);
+  border: 1px solid #b8860b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8c040;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.charAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+
+.charInfo { flex: 1; min-width: 0; }
+
+.charName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c9a888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.charMeta {
+  font-size: 11px;
+  color: #5c4828;
+  margin-top: 1px;
+}
+
+.charWarn {
+  color: #6050a0;
+  font-style: italic;
+}
+
+.charBlockIcon {
+  flex-shrink: 0;
+  color: #6050a0;
+  margin-left: auto;
+}
+
+.charCheckIcon {
+  flex-shrink: 0;
+  color: #b8860b;
+  margin-left: auto;
+}
+
 .noChars {
   font-size: 13px;
   color: #4a3510;

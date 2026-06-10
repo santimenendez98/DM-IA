@@ -196,8 +196,8 @@
 
 .classGrid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
 }
 
 .classCard {
@@ -314,11 +314,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 12px 6px;
+  gap: 4px;
+  padding: 14px 6px 10px;
   background: rgba(0,0,0,0.3);
   border: 1px solid #2e2010;
   border-radius: 3px;
+  position: relative;
+  cursor: default;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .statAbbr {
@@ -382,7 +385,7 @@
 
 .statMod {
   font-family: 'Cinzel', serif;
-  font-size: 12px;
+  font-size: 20px;
   font-weight: 700;
   min-width: 28px;
   text-align: center;
@@ -488,8 +491,9 @@
 
 .hpRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: start;
   margin-bottom: 12px;
 }
 .hpField { display: flex; flex-direction: column; gap: 0; }
@@ -755,6 +759,1053 @@
 .portraitBtnRemove:hover:not(:disabled) { border-color: #7a2020; color: #c05050; }
 .portraitBtnRemove:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* ── Stepper ─────────────────────────────────────────────────── */
+
+.stepper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.stepperItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.stepperCircle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid #3e2e10;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #3a2808;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.stepperDone {
+  border-color: #7a5c1e;
+  background: rgba(122,92,30,0.25);
+  color: #b8860b;
+}
+
+.stepperActive {
+  border-color: #b8860b;
+  background: rgba(184,134,11,0.12);
+  color: #e8c040;
+  box-shadow: 0 0 10px rgba(184,134,11,0.22);
+}
+
+.stepperLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #3a2808;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.stepperLabelActive {
+  color: #c9a030;
+}
+
+.stepperLine {
+  flex: 1;
+  height: 1px;
+  background: #2e2010;
+  min-width: 28px;
+  margin-top: 14px;
+  transition: background 0.3s;
+}
+
+.stepperLineDone {
+  background: #7a5c1e;
+}
+
+/* ── Step layout ─────────────────────────────────────────────── */
+
+.stepDesc {
+  text-align: center;
+  font-size: 14px;
+  color: #5c4828;
+  font-style: italic;
+  margin-bottom: 28px;
+}
+
+.stepContent {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.labelRequired {
+  color: #b8860b;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Class card new sub-elements ─────────────────────────────── */
+
+.classCardName {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #5c4828;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+.classCardSelected .classCardName { color: #e8c040; }
+
+.classCardDesc {
+  font-size: 9px;
+  color: #3a2808;
+  font-style: italic;
+  line-height: 1.2;
+  transition: color 0.15s;
+}
+.classCardSelected .classCardDesc { color: #7a5c1e; }
+
+.classCardMeta {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 2px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.classCardRole {
+  font-family: 'Cinzel', serif;
+  font-size: 6px;
+  font-weight: 600;
+  color: #4a3510;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 4px;
+  border: 1px solid #2a1e10;
+  border-radius: 1px;
+  transition: all 0.15s;
+}
+.classCardSelected .classCardRole { color: #b8860b; border-color: #5a4010; }
+
+.classCardDie {
+  font-family: 'Cinzel', serif;
+  font-size: 7px;
+  font-weight: 600;
+  color: #3a2808;
+  transition: color 0.15s;
+}
+.classCardSelected .classCardDie { color: #7a5c1e; }
+
+/* ── Stat score display ──────────────────────────────────────── */
+
+.statScore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+/* ── Roll button sub-label ───────────────────────────────────── */
+
+.rollBtnSub {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #5c4828;
+  margin-left: 8px;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+}
+
+/* ── Step navigation ─────────────────────────────────────────── */
+
+.stepNav {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 36px;
+  padding-top: 20px;
+  border-top: 1px solid #1e1508;
+}
+
+/* ── HP separator ────────────────────────────────────────────── */
+
+.hpSeparator {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  color: #3e2e10;
+  user-select: none;
+}
+
+/* ── HP suggestion card ──────────────────────────────────────── */
+
+.hpSuggestion {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: rgba(184,134,11,0.05);
+  border: 1px solid #3e2e10;
+  border-radius: 3px;
+}
+
+.hpSuggestionLeft {
+  flex: 1;
+  min-width: 0;
+}
+
+.hpSuggestionTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.hpSuggestionFormula {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.hpSuggestionValue {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: #e8c040;
+  line-height: 1;
+  text-shadow: 0 0 14px rgba(232,192,64,0.22);
+  min-width: 48px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.hpSuggestionBtn {
+  padding: 9px 18px;
+  background: rgba(122,92,30,0.2);
+  border: 1px solid #5a4010;
+  border-radius: 2px;
+  color: #c9a030;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.hpSuggestionBtn:hover { border-color: #b8860b; color: #e8c040; background: rgba(184,134,11,0.18); }
+
+/* ── Race cards ──────────────────────────────────────────────── */
+
+.raceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.raceCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 8px 14px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  font-family: inherit;
+  outline: none;
+}
+.raceCard:hover { border-color: #7a5c1e; background: rgba(184,134,11,0.05); }
+.raceCard:focus-visible { outline: 2px solid #b8860b; outline-offset: 2px; }
+
+.raceCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+  box-shadow: 0 0 14px rgba(184,134,11,0.18);
+}
+
+.raceIcon { opacity: 0.75; transition: opacity 0.15s; }
+.raceCardSelected .raceIcon { opacity: 1; }
+
+.raceName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7a5c1e;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+.raceCardSelected .raceName { color: #e8c040; }
+
+.raceDesc {
+  font-size: 10px;
+  color: #4a3510;
+  font-style: italic;
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+.raceCardSelected .raceDesc { color: #a07020; }
+
+.raceSpeed {
+  font-family: 'Cinzel', serif;
+  font-size: 7px;
+  color: #3a2808;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+.raceCardSelected .raceSpeed { color: #7a5c1e; }
+
+/* ── Section title ───────────────────────────────────────────── */
+
+.sectionTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.sectionTitleSub {
+  color: #5c4828;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-style: italic;
+}
+
+/* ── Subrace row ─────────────────────────────────────────────── */
+
+.subraceRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subraceCard {
+  flex: 1;
+  min-width: 160px;
+  padding: 14px 16px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: inherit;
+  outline: none;
+}
+.subraceCard:hover { border-color: #7a5c1e; background: rgba(184,134,11,0.05); }
+
+.subraceCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+  box-shadow: 0 0 10px rgba(184,134,11,0.15);
+}
+
+.subraceName {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  transition: color 0.15s;
+}
+.subraceCardSelected .subraceName { color: #e8c040; }
+
+.subraceTrait {
+  font-size: 11px;
+  color: #5c4828;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* ── Trait box ───────────────────────────────────────────────── */
+
+.traitBox {
+  padding: 16px 18px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #2e2010;
+  border-left: 2px solid #7a5c1e;
+  border-radius: 2px;
+}
+
+.traitBoxTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.traitBoxDesc {
+  font-size: 13px;
+  color: #7a6040;
+  font-style: italic;
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
+.traitList { list-style: none; padding: 0; margin: 0 0 12px; }
+
+.traitItem {
+  font-size: 13px;
+  color: #7a6040;
+  line-height: 1.8;
+  display: flex;
+  gap: 8px;
+}
+
+.traitBullet { color: #b8860b; flex-shrink: 0; }
+
+.bonusRow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+.bonusBadge {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #e8c040;
+  background: rgba(184,134,11,0.12);
+  border: 1px solid #5a4010;
+  border-radius: 2px;
+  padding: 3px 8px;
+  letter-spacing: 0.08em;
+}
+
+/* ── Class detail panel ──────────────────────────────────────── */
+
+.classDetail {
+  padding: 20px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+}
+
+.classDetailHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2a1e10;
+}
+
+.classDetailIcon { opacity: 0.8; flex-shrink: 0; }
+
+.classDetailName {
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8c040;
+  letter-spacing: 0.05em;
+}
+
+.classDetailDesc {
+  font-size: 13px;
+  color: #7a6040;
+  font-style: italic;
+  margin-top: 3px;
+}
+
+.classInfoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.classInfoItem {
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid #2a1e10;
+  border-radius: 2px;
+}
+
+.classInfoLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: #5c4828;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.classInfoValue {
+  font-size: 12px;
+  color: #c9a030;
+  line-height: 1.4;
+}
+
+.featuresTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a5c1e;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.featureRow {
+  margin-bottom: 10px;
+  padding-left: 10px;
+  border-left: 2px solid #3e2e10;
+}
+
+.featureName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #c9a030;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+
+.featureDesc {
+  font-size: 12px;
+  color: #7a6040;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ── Standard array ──────────────────────────────────────────── */
+
+.arrayInfo {
+  padding: 18px 20px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+}
+
+.arrayInfoTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.arrayInfoDesc {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.arrayPool {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.arrayValue {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(184,134,11,0.1);
+  border: 1px solid #7a5c1e;
+  border-radius: 3px;
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e8c040;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+}
+.arrayValue:hover:not(:disabled) { border-color: #b8860b; background: rgba(184,134,11,0.2); box-shadow: 0 0 8px rgba(184,134,11,0.3); }
+
+.arrayValueUsed {
+  opacity: 0.3;
+  cursor: default;
+  border-color: #2e2010;
+  background: rgba(0,0,0,0.2);
+  color: #5c4828;
+}
+
+.arrayValueDragging {
+  border-color: #e8c040 !important;
+  background: rgba(232,192,64,0.2) !important;
+  box-shadow: 0 0 12px rgba(232,192,64,0.4) !important;
+  color: #fff !important;
+}
+
+/* ── Stat block new states ───────────────────────────────────── */
+
+.statBlockPrimary {
+  border-color: #5a4010 !important;
+  background: rgba(122,92,30,0.1) !important;
+}
+
+.statBlockClickable { cursor: pointer; }
+.statBlockClickable:hover { border-color: #b8860b; background: rgba(184,134,11,0.08); }
+.statBlockDragOver { border-color: #e8c040 !important; background: rgba(232,192,64,0.15) !important; box-shadow: 0 0 12px rgba(232,192,64,0.35) !important; }
+
+.statPrimaryBadge {
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Cinzel', serif;
+  font-size: 6px;
+  font-weight: 700;
+  color: #b8860b;
+  background: #1e1308;
+  padding: 1px 5px;
+  border: 1px solid #5a4010;
+  border-radius: 1px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.statBase {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c9a030;
+}
+
+.statRacial {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  color: #5aaa70;
+  font-weight: 600;
+}
+
+.statTotal {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #e8c040;
+  border-top: 1px solid #3e2e10;
+  padding-top: 2px;
+  margin-top: 1px;
+  width: 100%;
+  text-align: center;
+}
+
+.statEmpty { font-size: 16px; color: #3a2808; }
+
+.statDesc {
+  font-size: 8.5px;
+  color: #3a2808;
+  font-style: italic;
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.statClear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120,30,30,0.3);
+  border: 1px solid #7a2020;
+  border-radius: 50%;
+  color: #c05050;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  font-family: monospace;
+  outline: none;
+}
+.statClear:hover { background: rgba(180,30,30,0.5); color: #ff8080; }
+
+/* ── Stat summary (HP preview) ───────────────────────────────── */
+
+.statSummary {
+  padding: 14px 18px;
+  background: rgba(184,134,11,0.05);
+  border: 1px solid #3e2e10;
+  border-radius: 3px;
+  text-align: center;
+}
+
+.statSummaryTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #7a5c1e;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.statSummaryHp {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  color: #c9a030;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+
+.statSummaryPlus, .statSummaryEq { color: #5c4828; font-size: 13px; }
+
+.statSummaryVal {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #e8c040;
+  text-shadow: 0 0 12px rgba(232,192,64,0.3);
+}
+
+/* ── Equipment list ──────────────────────────────────────────── */
+
+.equipList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.equipItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: #7a6040;
+  line-height: 1.5;
+}
+
+.equipBullet {
+  font-size: 10px;
+  color: #7a5c1e;
+  flex-shrink: 0;
+}
+
+/* ── Background grid ─────────────────────────────────────────── */
+
+.bgGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.bgCard {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: inherit;
+  outline: none;
+}
+.bgCard:hover { border-color: #7a5c1e; background: rgba(184,134,11,0.05); }
+.bgCard:focus-visible { outline: 2px solid #b8860b; outline-offset: 2px; }
+
+.bgCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+  box-shadow: 0 0 10px rgba(184,134,11,0.15);
+}
+
+.bgName {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7a5c1e;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+.bgCardSelected .bgName { color: #e8c040; }
+
+.bgDesc {
+  font-size: 11px;
+  color: #4a3510;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.bgSkills {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #5c4828;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+.bgCardSelected .bgSkills { color: #b8860b; }
+
+.bgMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.bgMetaItem {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  color: #5c4828;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid #2a1e10;
+  border-radius: 2px;
+  padding: 3px 8px;
+  letter-spacing: 0.06em;
+}
+
+/* ── Skill chips ─────────────────────────────────────────────── */
+
+.skillGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skillChip {
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  color: #5c4828;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+}
+.skillChip:hover:not(:disabled) { border-color: #7a5c1e; color: #c9a030; }
+.skillChip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.skillChipSelected {
+  border-color: #b8860b !important;
+  color: #e8c040 !important;
+  background: rgba(184,134,11,0.12) !important;
+}
+
+.skillChipLocked {
+  border-color: #5a4010 !important;
+  color: #b8860b !important;
+  background: rgba(122,92,30,0.15) !important;
+  cursor: default !important;
+  opacity: 1 !important;
+}
+
+/* ── Summary banner ──────────────────────────────────────────── */
+
+.summaryBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 14px 18px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #3e2e10;
+  border-radius: 3px;
+}
+
+.summaryItem {
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+  padding: 0 12px;
+}
+
+.summarySep {
+  width: 1px;
+  height: 32px;
+  background: #2a1e10;
+  flex-shrink: 0;
+}
+
+.summaryLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: #4a3510;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.summaryVal {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c9a030;
+}
+
+/* ── Alignment grid ──────────────────────────────────────────── */
+
+.alignGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.alignCard {
+  padding: 10px 8px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 2px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  font-family: inherit;
+  outline: none;
+}
+.alignCard:hover { border-color: #7a5c1e; background: rgba(184,134,11,0.05); }
+
+.alignCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.1) !important;
+}
+
+.alignLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #7a5c1e;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+.alignCardSelected .alignLabel { color: #e8c040; }
+
+.alignDesc {
+  font-size: 9px;
+  color: #3a2808;
+  font-style: italic;
+  line-height: 1.3;
+  margin-top: 3px;
+  transition: color 0.15s;
+}
+.alignCardSelected .alignDesc { color: #7a6040; }
+
+/* ── Final stats preview ─────────────────────────────────────── */
+
+.finalStats {
+  padding: 16px 18px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+}
+
+.finalStatsTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a5c1e;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.finalStatRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.finalStatItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 52px;
+  padding: 8px 6px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid #2a1e10;
+  border-radius: 2px;
+}
+
+.finalStatMod {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.finalStatValue {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  color: #7a5c1e;
+}
+
+.finalStatAbbr {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: #4a3510;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* ── Skeleton ────────────────────────────────────────────────── */
 
 @keyframes shimmer {
@@ -767,29 +1818,89 @@
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 820px) {
-  .classGrid { grid-template-columns: repeat(4, 1fr); }
-  .statGrid  { grid-template-columns: repeat(3, 1fr); }
-  .content   { padding: 20px 16px 60px; }
+  .raceGrid        { grid-template-columns: repeat(2, 1fr); }
+  .classGrid       { grid-template-columns: repeat(2, 1fr); }
+  .statGrid        { grid-template-columns: repeat(3, 1fr); }
+  .classInfoGrid   { grid-template-columns: 1fr; }
+  .content         { padding: 20px 16px 60px; }
 }
 
 @media (max-width: 600px) {
-  .cardBody    { padding: 24px 18px; }
-  .title       { font-size: 19px; }
-  .classGrid   { grid-template-columns: repeat(3, 1fr); }
-  .statGrid    { grid-template-columns: repeat(2, 1fr); }
-  .hpRow       { grid-template-columns: 1fr; }
-  .actions     { flex-direction: column-reverse; }
-  .btnPrimary  { width: 100%; }
-  .btnSecondary { width: 100%; }
-  .portraitRow { flex-direction: column; align-items: center; }
-  .portraitMeta { align-items: center; text-align: center; }
-  .levelRow    { gap: 16px; }
+  .cardBody          { padding: 24px 18px; }
+  .title             { font-size: 19px; }
+  .raceGrid          { grid-template-columns: repeat(2, 1fr); }
+  .classGrid         { grid-template-columns: repeat(2, 1fr); }
+  .bgGrid            { grid-template-columns: repeat(2, 1fr); }
+  .alignGrid         { grid-template-columns: repeat(3, 1fr); }
+  .statGrid          { grid-template-columns: repeat(2, 1fr); }
+  .hpRow             { grid-template-columns: 1fr; }
+  .hpSeparator       { display: none; }
+  .stepNav           { flex-direction: column-reverse; }
+  .btnPrimary        { width: 100%; }
+  .btnSecondary      { width: 100%; }
+  .portraitRow       { flex-direction: column; align-items: center; }
+  .portraitMeta      { align-items: center; text-align: center; }
+  .stepperLabel      { display: none; }
+  .summaryBanner     { gap: 8px; }
+  .summarySep        { display: none; }
+  .summaryItem       { padding: 0 6px; }
+  .finalStatRow      { gap: 4px; }
 }
 
 @media (max-width: 400px) {
+  .raceGrid    { grid-template-columns: repeat(2, 1fr); }
   .classGrid   { grid-template-columns: repeat(2, 1fr); }
+  .bgGrid      { grid-template-columns: 1fr; }
   .content     { padding: 16px 12px 50px; }
   .cardBody    { padding: 20px 14px; }
   .title       { font-size: 16px; }
   .statGrid    { grid-template-columns: repeat(3, 1fr); }
+  .alignGrid   { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── Equipment choice cards ──────────────────────────────────── */
+
+.equipChoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.equipChoiceCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid #2e2010;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: inherit;
+  outline: none;
+  color: #8b6b35;
+}
+.equipChoiceCard:hover { border-color: #7a5c1e; background: rgba(184,134,11,0.05); }
+.equipChoiceCard:focus-visible { outline: 2px solid #b8860b; outline-offset: 2px; }
+
+.equipChoiceCardSelected {
+  border-color: #b8860b !important;
+  background: rgba(184,134,11,0.12) !important;
+  color: #e0cc90 !important;
+}
+
+.equipChoiceIcon {
+  font-size: 13px;
+  color: #7a5c1e;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: color 0.15s;
+}
+.equipChoiceCardSelected .equipChoiceIcon { color: #e8c040; }
+
+.equipChoiceText {
+  font-size: 14px;
+  line-height: 1.4;
 }

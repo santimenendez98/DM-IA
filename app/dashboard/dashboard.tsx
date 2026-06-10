@@ -12,6 +12,7 @@ import type { Character } from "@/types/character";
 import type { JoinRequest } from "@/types/join-request";
 import { useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
+import { KNOWN_CASTERS } from "@/app/data/spells";
 
 interface JoinedCampaign {
   id: string;
@@ -63,7 +64,8 @@ export default function Dashboard() {
   const [leavingId, setLeavingId]     = useState<string | null>(null);
   const router = useRouter();
   const { lang } = useLang();
-  const tr = t[lang].dashboard;
+  const tr         = t[lang].dashboard;
+  const classNames = t[lang].character.classNames as unknown as Record<string, string>;
   const locale = lang === "en" ? "en-US" : lang === "pt" ? "pt-BR" : "es-ES";
 
   const STATS: Array<{ key: string; label: string; comingSoon?: boolean; icon: React.ReactNode }> = [
@@ -584,7 +586,7 @@ export default function Dashboard() {
                           <div className={s.joinedChars}>
                             {c.my_characters.map((ch) => (
                               <span key={ch.id} className={s.joinedCharBadge}>
-                                {ch.name} · {ch.class} {tr.levelAbbr}{ch.level}
+                                {ch.name} · {classNames[ch.class] ?? ch.class} {tr.levelAbbr}{ch.level}
                               </span>
                             ))}
                           </div>
@@ -672,7 +674,7 @@ export default function Dashboard() {
                   <div className={s.campaignInfo}>
                     <div className={s.campaignName}>{c.name}</div>
                     <div className={s.campaignMeta}>
-                      <span className={s.badge}>{c.class}</span>
+                      <span className={s.badge}>{classNames[c.class] ?? c.class}</span>
                       <span className={s.badge}>{tr.levelAbbr} {c.level}</span>
                     </div>
                     <div className={s.charHpRow}>
@@ -681,6 +683,12 @@ export default function Dashboard() {
                       </div>
                       <span className={s.charHpText}>{c.hp}/{c.max_hp}</span>
                     </div>
+                    {c.level_up_authorized && (
+                      <div className={s.charNotifLevelUp}>{tr.charNotifLevelUp}</div>
+                    )}
+                    {c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length && (
+                      <div className={s.charNotifSpells}>{tr.charNotifSpells}</div>
+                    )}
                   </div>
                   <button
                     className={s.btnPlay}

@@ -4,6 +4,8 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./NotificationsBell.module.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -20,16 +22,24 @@ export interface AppNotification {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function timeAgo(iso: string): string {
+type TimeTr = {
+  timeNow: string;
+  timeMinsFmt: string;
+  timeHoursFmt: string;
+  timeDaysFmt: string;
+  locale: string;
+};
+
+function timeAgo(iso: string, tr: TimeTr): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `hace ${mins}m`;
+  if (mins < 1) return tr.timeNow;
+  if (mins < 60) return tr.timeMinsFmt.replace("{n}", String(mins));
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours}h`;
+  if (hours < 24) return tr.timeHoursFmt.replace("{n}", String(hours));
   const days = Math.floor(hours / 24);
-  if (days < 7) return `hace ${days}d`;
-  return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  if (days < 7) return tr.timeDaysFmt.replace("{n}", String(days));
+  return new Date(iso).toLocaleDateString(tr.locale, { day: "numeric", month: "short" });
 }
 
 function notifHref(n: AppNotification): string | null {
@@ -129,6 +139,9 @@ interface Props {
 
 export default function NotificationsBell({ userId }: Props) {
   const router = useRouter();
+  const { lang } = useLang();
+  const tr = t[lang].notifications;
+
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -208,7 +221,7 @@ export default function NotificationsBell({ userId }: Props) {
         className={s.bell}
         onClick={() => setOpen((v) => !v)}
         type="button"
-        aria-label="Notificaciones"
+        aria-label={tr.ariaLabel}
       >
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
           <path
@@ -225,16 +238,16 @@ export default function NotificationsBell({ userId }: Props) {
       {open && (
         <div className={s.panel}>
           <div className={s.panelHeader}>
-            <span className={s.panelTitle}>Notificaciones</span>
+            <span className={s.panelTitle}>{tr.title}</span>
             <div className={s.panelActions}>
               {unread > 0 && (
                 <button className={s.headerBtn} onClick={markAllRead} type="button">
-                  Leído
+                  {tr.markRead}
                 </button>
               )}
               {notifications.length > 0 && (
                 <button className={`${s.headerBtn} ${s.headerBtnDelete}`} onClick={deleteAll} type="button">
-                  Borrar todo
+                  {tr.deleteAll}
                 </button>
               )}
             </div>
@@ -250,7 +263,7 @@ export default function NotificationsBell({ userId }: Props) {
                   />
                   <path d="M12 21a3 3 0 0 0 6 0" fill="none" stroke="#3a2808" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
-                <p>Sin notificaciones</p>
+                <p>{tr.empty}</p>
               </div>
             ) : (
               notifications.map((n) => {
@@ -271,7 +284,7 @@ export default function NotificationsBell({ userId }: Props) {
                       <div className={s.itemBody}>
                         <div className={s.itemTitle}>{n.title}</div>
                         {n.body && <div className={s.itemText}>{n.body}</div>}
-                        <div className={s.itemTime}>{timeAgo(n.created_at)}</div>
+                        <div className={s.itemTime}>{timeAgo(n.created_at, tr)}</div>
                       </div>
                       {!n.read && <div className={s.dot} />}
                     </button>
@@ -279,7 +292,7 @@ export default function NotificationsBell({ userId }: Props) {
                       className={s.deleteBtn}
                       onClick={(e) => deleteOne(e, n.id)}
                       type="button"
-                      aria-label="Eliminar notificación"
+                      aria-label={tr.deleteAria}
                     >
                       <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden>
                         <line x1="1" y1="1" x2="8" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />

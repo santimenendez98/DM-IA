@@ -12,9 +12,16 @@ export interface CharacterItem {
   description: string;
 }
 
+export interface CharacterSpell {
+  name: string;
+  level: number;
+  school: string;
+  desc: string;
+}
+
 export interface Character {
   id: string;
-  user_id: string;        // owner — not tied to any campaign
+  user_id: string;
   name: string;
   class: string;
   level: number;
@@ -24,11 +31,16 @@ export interface Character {
   items: CharacterItem[];
   backstory: string | null;
   image_url: string | null;
+  race: string | null;
+  background: string | null;
+  alignment: string | null;
+  skill_proficiencies: string[];
+  spells_known: CharacterSpell[];
+  level_up_authorized: boolean;
   created_at: string;
   updated_at: string;
 }
 
-// No campaign_id required — characters are created standalone
 export type CreateCharacterInput = {
   name: string;
   class: string;
@@ -38,6 +50,11 @@ export type CreateCharacterInput = {
   stats?: CharacterStats;
   backstory?: string;
   image_url?: string;
+  race?: string;
+  background?: string;
+  alignment?: string;
+  skill_proficiencies?: string[];
+  items?: CharacterItem[];
 };
 
 export type UpdateCharacterInput = Partial<CreateCharacterInput>;

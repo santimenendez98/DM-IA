@@ -8,6 +8,8 @@ import type { Setting, Tone } from "@/types/union_types";
 import { FieldError } from "@/components/FieldError";
 import { cx } from "@/components/cx";
 import { OrnamentDivider } from "@/components/OrnamentDivider";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./new-campaign.module.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -19,127 +21,71 @@ type FormErrors = {
   general?: string;
 };
 
-// ── Setting cards ──────────────────────────────────────────────
+// ── Setting icons (static, language-independent) ───────────────
 
-const SETTING_CARDS: Array<{
-  value: Setting;
-  label: string;
-  desc: string;
-  icon: React.ReactElement;
-}> = [
-  {
-    value: "fantasy",
-    label: "Fantasía",
-    desc: "Dragones, magia y reinos épicos",
-    icon: (
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
-        <line x1="8" y1="22" x2="22" y2="8" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
-        <line x1="6" y1="12" x2="14" y2="12" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
-        <polygon points="22,8 19,9 21,11" fill="#e8c040" />
-        <polygon points="8,22 11,21 9,19" fill="#e8c040" />
-        <circle cx="22" cy="8" r="1.4" fill="#e8c040" />
-      </svg>
-    ),
-  },
-  {
-    value: "sci-fi",
-    label: "Ciencia Ficción",
-    desc: "Naves estelares y futuros lejanos",
-    icon: (
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
-        <path
-          d="M15 5 C15 5 22 9 22 17 L19 21 H11 L8 17 C8 9 15 5 15 5Z"
-          fill="none"
-          stroke="#b8860b"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-        <line x1="11" y1="21" x2="10" y2="25" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="19" y1="21" x2="20" y2="25" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
-        <circle cx="15" cy="13" r="2.2" fill="none" stroke="#e8c040" strokeWidth="1.4" />
-      </svg>
-    ),
-  },
-  {
-    value: "horror",
-    label: "Horror Arcano",
-    desc: "Oscuridad, misterio y terror",
-    icon: (
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
-        <path
-          d="M15 5 C9 5 5 9 5 15 C5 20 8 23 11 24 L11 26 L19 26 L19 24 C22 23 25 20 25 15 C25 9 21 5 15 5Z"
-          fill="none"
-          stroke="#b8860b"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-        />
-        <circle cx="11" cy="15" r="2" fill="none" stroke="#b8860b" strokeWidth="1.4" />
-        <circle cx="19" cy="15" r="2" fill="none" stroke="#b8860b" strokeWidth="1.4" />
-        <line x1="13" y1="26" x2="13" y2="24" stroke="#b8860b" strokeWidth="1.2" />
-        <line x1="17" y1="26" x2="17" y2="24" stroke="#b8860b" strokeWidth="1.2" />
-      </svg>
-    ),
-  },
-  {
-    value: "cyberpunk",
-    label: "Cyberpunk",
-    desc: "Megaciudades y tecnología distópica",
-    icon: (
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
-        <polygon
-          points="15,4 22,8 22,22 15,26 8,22 8,8"
-          fill="none"
-          stroke="#b8860b"
-          strokeWidth="1.7"
-        />
-        <circle cx="15" cy="15" r="3" fill="none" stroke="#e8c040" strokeWidth="1.4" />
-        <line x1="15" y1="12" x2="15" y2="8" stroke="#b8860b" strokeWidth="1.2" />
-        <line x1="18" y1="13.5" x2="21" y2="11" stroke="#b8860b" strokeWidth="1.2" />
-        <line x1="12" y1="16.5" x2="9" y2="19" stroke="#b8860b" strokeWidth="1.2" />
-      </svg>
-    ),
-  },
-  {
-    value: "custom",
-    label: "Personalizado",
-    desc: "Crea tu propio universo único",
-    icon: (
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
-        <rect x="8" y="6" width="14" height="18" rx="2" fill="none" stroke="#b8860b" strokeWidth="1.7" />
-        <line x1="11" y1="11" x2="19" y2="11" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="11" y1="15" x2="19" y2="15" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="11" y1="19" x2="16" y2="19" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="18" y1="18" x2="23" y2="23" stroke="#e8c040" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="23" cy="23" r="1.5" fill="#e8c040" />
-      </svg>
-    ),
-  },
-];
+const SETTING_ICONS: Record<string, React.ReactElement> = {
+  fantasy: (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+      <line x1="8" y1="22" x2="22" y2="8" stroke="#b8860b" strokeWidth="2" strokeLinecap="round" />
+      <line x1="6" y1="12" x2="14" y2="12" stroke="#b8860b" strokeWidth="1.6" strokeLinecap="round" />
+      <polygon points="22,8 19,9 21,11" fill="#e8c040" />
+      <polygon points="8,22 11,21 9,19" fill="#e8c040" />
+      <circle cx="22" cy="8" r="1.4" fill="#e8c040" />
+    </svg>
+  ),
+  "sci-fi": (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+      <path
+        d="M15 5 C15 5 22 9 22 17 L19 21 H11 L8 17 C8 9 15 5 15 5Z"
+        fill="none" stroke="#b8860b" strokeWidth="1.6" strokeLinejoin="round"
+      />
+      <line x1="11" y1="21" x2="10" y2="25" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+      <line x1="19" y1="21" x2="20" y2="25" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="15" cy="13" r="2.2" fill="none" stroke="#e8c040" strokeWidth="1.4" />
+    </svg>
+  ),
+  horror: (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+      <path
+        d="M15 5 C9 5 5 9 5 15 C5 20 8 23 11 24 L11 26 L19 26 L19 24 C22 23 25 20 25 15 C25 9 21 5 15 5Z"
+        fill="none" stroke="#b8860b" strokeWidth="1.7" strokeLinejoin="round"
+      />
+      <circle cx="11" cy="15" r="2" fill="none" stroke="#b8860b" strokeWidth="1.4" />
+      <circle cx="19" cy="15" r="2" fill="none" stroke="#b8860b" strokeWidth="1.4" />
+      <line x1="13" y1="26" x2="13" y2="24" stroke="#b8860b" strokeWidth="1.2" />
+      <line x1="17" y1="26" x2="17" y2="24" stroke="#b8860b" strokeWidth="1.2" />
+    </svg>
+  ),
+  cyberpunk: (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+      <polygon points="15,4 22,8 22,22 15,26 8,22 8,8" fill="none" stroke="#b8860b" strokeWidth="1.7" />
+      <circle cx="15" cy="15" r="3" fill="none" stroke="#e8c040" strokeWidth="1.4" />
+      <line x1="15" y1="12" x2="15" y2="8" stroke="#b8860b" strokeWidth="1.2" />
+      <line x1="18" y1="13.5" x2="21" y2="11" stroke="#b8860b" strokeWidth="1.2" />
+      <line x1="12" y1="16.5" x2="9" y2="19" stroke="#b8860b" strokeWidth="1.2" />
+    </svg>
+  ),
+  custom: (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+      <rect x="8" y="6" width="14" height="18" rx="2" fill="none" stroke="#b8860b" strokeWidth="1.7" />
+      <line x1="11" y1="11" x2="19" y2="11" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="11" y1="15" x2="19" y2="15" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="11" y1="19" x2="16" y2="19" stroke="#b8860b" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="18" y1="18" x2="23" y2="23" stroke="#e8c040" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="23" cy="23" r="1.5" fill="#e8c040" />
+    </svg>
+  ),
+};
 
-// ── Tone cards ─────────────────────────────────────────────────
-
-const TONE_CARDS: Array<{ value: Tone; label: string; desc: string }> = [
-  { value: "epic",      label: "Épico",      desc: "Grandes gestas y hazañas heroicas" },
-  { value: "dark",      label: "Oscuro",     desc: "Sombras, moral ambigua y dilemas" },
-  { value: "comedic",   label: "Cómico",     desc: "Humor y situaciones absurdas" },
-  { value: "gritty",    label: "Crudo",      desc: "Realismo brutal y consecuencias" },
-  { value: "whimsical", label: "Caprichoso", desc: "Fantástico, imaginativo y lúdico" },
-];
-
-// ── Validate ───────────────────────────────────────────────────
-
-function validate(name: string, setting: Setting | "", tone: Tone | ""): FormErrors {
-  const errs: FormErrors = {};
-  if (!name.trim()) errs.name = "El nombre de la campaña es obligatorio.";
-  else if (name.trim().length < 2) errs.name = "El nombre debe tener al menos 2 caracteres.";
-  if (!setting) errs.setting = "Debes elegir un escenario.";
-  if (!tone) errs.tone = "Debes elegir un tono para la campaña.";
-  return errs;
-}
+const SETTING_VALUES: Setting[] = ["fantasy", "sci-fi", "horror", "cyberpunk", "custom"];
+const TONE_VALUES: Tone[] = ["epic", "dark", "comedic", "gritty", "whimsical"];
 
 // ── Component ──────────────────────────────────────────────────
 
 export default function NewCampaign() {
+  const { lang } = useLang();
+  const tr = t[lang].newCampaign;
+
   const [authLoading, setAuthLoading] = useState(true);
   const [name, setName] = useState("");
   const [setting, setSetting] = useState<Setting | "">("");
@@ -162,6 +108,15 @@ export default function NewCampaign() {
   function triggerShake() {
     setShake(true);
     setTimeout(() => setShake(false), 450);
+  }
+
+  function validate(n: string, sett: Setting | "", tn: Tone | ""): FormErrors {
+    const errs: FormErrors = {};
+    if (!n.trim()) errs.name = tr.errName;
+    else if (n.trim().length < 2) errs.name = tr.errNameShort;
+    if (!sett) errs.setting = tr.errSetting;
+    if (!tn) errs.tone = tr.errTone;
+    return errs;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -188,14 +143,14 @@ export default function NewCampaign() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setErrors({ general: (data as { error?: string }).error ?? "Error al crear la campaña." });
+        setErrors({ general: (data as { error?: string }).error ?? tr.errGeneral });
         triggerShake();
         return;
       }
       const created = await res.json() as { id: string };
       router.push(`/campaigns/${created.id}`);
     } catch {
-      setErrors({ general: "Error de conexión. Inténtalo de nuevo." });
+      setErrors({ general: tr.errConn });
       triggerShake();
     } finally {
       setSubmitting(false);
@@ -217,6 +172,11 @@ export default function NewCampaign() {
 
   // ── Form ─────────────────────────────────────────────────────
 
+  const sl = tr.settingLabels as Record<string, string>;
+  const sd = tr.settingDescs as Record<string, string>;
+  const tl = tr.toneLabels as Record<string, string>;
+  const td = tr.toneDescs as Record<string, string>;
+
   return (
     <div className={s.page}>
       <div className={s.stars} aria-hidden />
@@ -231,7 +191,7 @@ export default function NewCampaign() {
             <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Volver al Salón
+          {tr.back}
         </button>
 
         <div className={cx(s.card, shake && s.cardShake)}>
@@ -252,7 +212,7 @@ export default function NewCampaign() {
                   <circle cx="18" cy="18" r="4" fill="#e8c040" opacity="0.8" />
                 </svg>
               </div>
-              <h1 className={s.title}>Forjar Nueva Campaña</h1>
+              <h1 className={s.title}>{tr.title}</h1>
               <p className={s.subtitle}>
                 &ldquo;Todo gran viaje comienza con el primero de sus pasos...&rdquo;
               </p>
@@ -282,14 +242,14 @@ export default function NewCampaign() {
               {/* Campaign name */}
               <div className={s.section}>
                 <label className={s.label} htmlFor="camp-name">
-                  Nombre de la Campaña
+                  {tr.nameLabel}
                 </label>
                 <input
                   id="camp-name"
                   className={cx(s.input, errors.name && s.inputError)}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: La Maldición de Strahd, La Era de los Dragones..."
+                  placeholder={tr.namePlaceholder}
                   maxLength={80}
                   autoFocus
                 />
@@ -300,19 +260,19 @@ export default function NewCampaign() {
 
               {/* Setting */}
               <div className={s.section}>
-                <div className={s.label}>El Escenario</div>
+                <div className={s.label}>{tr.settingLabel}</div>
                 <div className={s.settingGrid}>
-                  {SETTING_CARDS.map((card) => (
+                  {SETTING_VALUES.map((value) => (
                     <button
-                      key={card.value}
+                      key={value}
                       type="button"
-                      className={cx(s.settingCard, setting === card.value && s.settingCardSelected)}
-                      onClick={() => setSetting(card.value)}
-                      title={card.desc}
+                      className={cx(s.settingCard, setting === value && s.settingCardSelected)}
+                      onClick={() => setSetting(value)}
+                      title={sd[value]}
                     >
-                      <div className={s.settingCardIcon}>{card.icon}</div>
-                      <div className={s.settingCardLabel}>{card.label}</div>
-                      <div className={s.settingCardDesc}>{card.desc}</div>
+                      <div className={s.settingCardIcon}>{SETTING_ICONS[value]}</div>
+                      <div className={s.settingCardLabel}>{sl[value]}</div>
+                      <div className={s.settingCardDesc}>{sd[value]}</div>
                     </button>
                   ))}
                 </div>
@@ -323,17 +283,17 @@ export default function NewCampaign() {
 
               {/* Tone */}
               <div className={s.section}>
-                <div className={s.label}>El Tono</div>
+                <div className={s.label}>{tr.toneLabel}</div>
                 <div className={s.toneRow}>
-                  {TONE_CARDS.map((card) => (
+                  {TONE_VALUES.map((value) => (
                     <button
-                      key={card.value}
+                      key={value}
                       type="button"
-                      className={cx(s.toneBtn, tone === card.value && s.toneBtnSelected)}
-                      onClick={() => setTone(card.value)}
-                      title={card.desc}
+                      className={cx(s.toneBtn, tone === value && s.toneBtnSelected)}
+                      onClick={() => setTone(value)}
+                      title={td[value]}
                     >
-                      {card.label}
+                      {tl[value]}
                     </button>
                   ))}
                 </div>
@@ -345,15 +305,15 @@ export default function NewCampaign() {
               {/* System prompt */}
               <div className={s.section}>
                 <label className={s.label} htmlFor="camp-prompt">
-                  Instrucciones del DM
-                  <span className={s.labelOptional}>&nbsp;— opcional</span>
+                  {tr.dmLabel}
+                  <span className={s.labelOptional}>&nbsp;{tr.dmOptional}</span>
                 </label>
                 <textarea
                   id="camp-prompt"
                   className={s.textarea}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Personaliza el comportamiento del DM virtual. Ej: 'Habla en un tono teatral y dramático. Pon énfasis en la descripción del entorno y las consecuencias de cada acción...'"
+                  placeholder={tr.dmPlaceholder}
                   rows={4}
                   maxLength={1000}
                 />
@@ -361,7 +321,7 @@ export default function NewCampaign() {
 
               {/* Visibility */}
               <div className={s.section}>
-                <div className={s.label}>Visibilidad</div>
+                <div className={s.label}>{tr.visibilityLabel}</div>
                 <div className={s.visibilityRow}>
                   <button
                     type="button"
@@ -373,8 +333,8 @@ export default function NewCampaign() {
                       <path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                       <circle cx="8" cy="11" r="1.2" fill="currentColor" />
                     </svg>
-                    <span className={s.visibilityLabel}>Privada</span>
-                    <span className={s.visibilityDesc}>Solo visible para ti</span>
+                    <span className={s.visibilityLabel}>{tr.privateLabel}</span>
+                    <span className={s.visibilityDesc}>{tr.privateDesc}</span>
                   </button>
                   <button
                     type="button"
@@ -385,8 +345,8 @@ export default function NewCampaign() {
                       <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
                       <path d="M2 8h12M8 2c-2 2-3 4-3 6s1 4 3 6M8 2c2 2 3 4 3 6s-1 4-3 6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                     </svg>
-                    <span className={s.visibilityLabel}>Pública</span>
-                    <span className={s.visibilityDesc}>Visible en el Gremio</span>
+                    <span className={s.visibilityLabel}>{tr.publicLabel}</span>
+                    <span className={s.visibilityDesc}>{tr.publicDesc}</span>
                   </button>
                 </div>
               </div>
@@ -401,10 +361,10 @@ export default function NewCampaign() {
                   onClick={() => router.push("/dashboard")}
                   disabled={submitting}
                 >
-                  Cancelar
+                  {tr.cancel}
                 </button>
                 <button type="submit" className={s.btnPrimary} disabled={submitting}>
-                  {submitting ? "Forjando campaña..." : "✦ Crear Campaña ✦"}
+                  {submitting ? tr.submitting : tr.submit}
                 </button>
               </div>
             </form>
@@ -416,4 +376,3 @@ export default function NewCampaign() {
     </div>
   );
 }
-

@@ -7,29 +7,17 @@ import { loader } from "@/lib/loader";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Character } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
+import { KNOWN_CASTERS } from "@/app/data/spells";
 import type { JoinRequest } from "@/types/join-request";
 import { cx } from "@/components/cx";
+import { useLang } from "@/lib/lang";
+import { t } from "@/lib/translations";
 import s from "./campaign-detail.module.css";
 
 // ── Constants ──────────────────────────────────────────────────
 
 const MAX_PARTY = 4;
 
-const SETTING_LABELS: Record<string, string> = {
-  fantasy: "Fantasía",
-  "sci-fi": "Ciencia Ficción",
-  horror: "Horror",
-  cyberpunk: "Cyberpunk",
-  custom: "Personalizado",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  epic: "Épico",
-  dark: "Oscuro",
-  comedic: "Cómico",
-  gritty: "Crudo",
-  whimsical: "Caprichoso",
-};
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -44,8 +32,8 @@ function statMod(score: number): string {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", {
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -57,8 +45,14 @@ function formatDate(iso: string): string {
 export default function CampaignDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { lang } = useLang();
+  const trc        = t[lang].campaign;
+  const settings   = t[lang].dashboard.settings  as Record<string, string>;
+  const tones      = t[lang].dashboard.tones      as Record<string, string>;
+  const classNames = t[lang].character.classNames as unknown as Record<string, string>;
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [allChars, setAllChars] = useState<Character[]>([]);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +64,7 @@ export default function CampaignDetailPage() {
   const [starting, setStarting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [authPending, setAuthPending] = useState<string | null>(null);
 
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +94,7 @@ export default function CampaignDetailPage() {
 
       // Show campaign immediately — loader stops here so the page is visible.
       setCampaign(camp);
+      setCurrentUserId(u.id);
       setLoading(false);
       loader.stop();
 
@@ -176,15 +172,15 @@ export default function CampaignDetailPage() {
           }
         } else {
           const data = await res.json().catch(() => ({})) as { error?: string };
-          setAddError(data.error ?? "Error al agregar el personaje.");
+          setAddError(data.error ?? trc.errAddChar);
         }
       } catch {
-        setAddError("Error de conexión. Inténtalo de nuevo.");
+        setAddError(trc.errConn);
       } finally {
         setPending(null);
       }
     },
-    [campaign, allChars, pending],
+    [campaign, allChars, pending, trc],
   );
 
   const removeCharacter = useCallback(
@@ -255,6 +251,57 @@ export default function CampaignDetailPage() {
     }).catch(() => {});
   }
 
+  async function toggleLevelUpAuth(charId: string, authorize: boolean) {
+    if (!campaign || authPending) return;
+    setAuthPending(charId);
+    try {
+      const method = authorize ? "POST" : "DELETE";
+      const res = await fetch(`/api/campaigns/${campaign.id}/authorize-levelup`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ character_ids: [charId] }),
+      });
+      if (res.ok) {
+        setCampaign((prev) =>
+          prev
+            ? {
+                ...prev,
+                characters: prev.characters.map((c) =>
+                  c.id === charId ? { ...c, level_up_authorized: authorize } : c,
+                ),
+              }
+            : prev,
+        );
+      }
+    } finally {
+      setAuthPending(null);
+    }
+  }
+
+  async function authorizeAll() {
+    if (!campaign || authPending) return;
+    setAuthPending("all");
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/authorize-levelup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      if (res.ok) {
+        setCampaign((prev) =>
+          prev
+            ? {
+                ...prev,
+                characters: prev.characters.map((c) => ({ ...c, level_up_authorized: true })),
+              }
+            : prev,
+        );
+      }
+    } finally {
+      setAuthPending(null);
+    }
+  }
+
   async function handleStart() {
     if (!campaign || starting) return;
     setStarting(true);
@@ -322,15 +369,15 @@ export default function CampaignDetailPage() {
                 strokeLinejoin="round"
               />
             </svg>
-            Volver al Salón
+            {trc.back}
           </button>
           <div className={s.notFound}>
-            <p>Esta campaña no existe o no te pertenece.</p>
+            <p>{trc.notFoundMsg}</p>
             <button
               className={s.btnSecondary}
               onClick={() => router.push("/dashboard")}
             >
-              Volver al Salón
+              {trc.back}
             </button>
           </div>
         </div>
@@ -342,6 +389,7 @@ export default function CampaignDetailPage() {
 
   const party = campaign.characters;
   const partyIds = new Set(party.map((c) => c.id));
+  const isDM = currentUserId === campaign.user_id;
 
   // Characters locked in another campaign that is already underway.
   const busyCharIds = new Set(
@@ -349,6 +397,10 @@ export default function CampaignDetailPage() {
       .filter((c) => c.id !== campaign.id && c.started_at !== null)
       .flatMap((c) => c.character_ids ?? []),
   );
+
+  function needsSpellSetup(c: Character): boolean {
+    return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
+  }
 
   const available = allChars.filter(
     (c) => !partyIds.has(c.id) && !busyCharIds.has(c.id),
@@ -387,7 +439,7 @@ export default function CampaignDetailPage() {
               strokeLinejoin="round"
             />
           </svg>
-          Volver al Salón
+          {trc.back}
         </button>
 
         {/* ── Hero ─────────────────────────────────────────────── */}
@@ -398,13 +450,13 @@ export default function CampaignDetailPage() {
               <h1 className={s.heroName}>{campaign.name}</h1>
               <div className={s.heroMeta}>
                 <span className={s.badge}>
-                  {SETTING_LABELS[campaign.setting] ?? campaign.setting}
+                  {settings[campaign.setting] ?? campaign.setting}
                 </span>
                 <span className={s.badge}>
-                  {TONE_LABELS[campaign.tone] ?? campaign.tone}
+                  {tones[campaign.tone] ?? campaign.tone}
                 </span>
                 {isStarted && (
-                  <span className={cx(s.badge, s.badgeStarted)}>En curso</span>
+                  <span className={cx(s.badge, s.badgeStarted)}>{trc.isStarted}</span>
                 )}
               </div>
             </div>
@@ -458,11 +510,26 @@ export default function CampaignDetailPage() {
                   opacity="0"
                 />
               </svg>
-              Grupo de Aventureros
+              {trc.partyTitle}
             </div>
             <span className={s.partyCount}>
               {party.length} / {MAX_PARTY}
             </span>
+            {isDM && party.length > 0 && (
+              <button
+                type="button"
+                className={s.authAllBtn}
+                onClick={authorizeAll}
+                disabled={!!authPending}
+                title={trc.authAllTitle}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
+                  <line x1="5.5" y1="9" x2="5.5" y2="2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  <path d="M2.5 4.5L5.5 2L8.5 4.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {trc.authAllBtn}
+              </button>
+            )}
           </div>
 
           {addError && (
@@ -501,8 +568,8 @@ export default function CampaignDetailPage() {
                   <div className={s.slotInfo}>
                     <div className={s.slotName}>{char.name}</div>
                     <div className={s.slotMeta}>
-                      <span className={s.badgeSmall}>{char.class}</span>
-                      <span className={s.badgeSmall}>Nv.{char.level}</span>
+                      <span className={s.badgeSmall}>{classNames[char.class] ?? char.class}</span>
+                      <span className={s.badgeSmall}>{trc.levelAbbr}{char.level}</span>
                     </div>
                     <div className={s.slotHpRow}>
                       <div className={s.slotHpBar}>
@@ -523,11 +590,37 @@ export default function CampaignDetailPage() {
                       </span>
                     </div>
                   </div>
+                  {/* Level-up status inside slotInfo bottom area */}
+                  {isDM && (
+                    <button
+                      type="button"
+                      className={cx(
+                        s.slotAuthBtn,
+                        char.level_up_authorized && s.slotAuthBtnActive,
+                      )}
+                      onClick={() => toggleLevelUpAuth(char.id, !char.level_up_authorized)}
+                      disabled={!!authPending || char.level >= 20}
+                      title={char.level_up_authorized ? trc.revokeAuthTitle : trc.authorizeTitle}
+                    >
+                      {authPending === char.id ? "···" : (
+                        <>
+                          <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden>
+                            <line x1="4.5" y1="8" x2="4.5" y2="1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                            <path d="M2 4L4.5 1.5L7 4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          {char.level_up_authorized ? trc.authorizedLabel : trc.authorizeBtn}
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {!isDM && char.level_up_authorized && (
+                    <span className={s.levelUpBadge}>{trc.levelUpBadge}</span>
+                  )}
                   <button
                     className={s.slotRemove}
                     onClick={() => removeCharacter(char.id)}
                     disabled={!!pending}
-                    title="Expulsar del grupo"
+                    title={trc.expelTitle}
                     type="button"
                   >
                     {isRemoving ? "·" : "✕"}
@@ -544,7 +637,7 @@ export default function CampaignDetailPage() {
                   {i === 0 && isAdding ? (
                     <div className={s.slotLoading}>
                       <div className={s.spinner} />
-                      <span className={s.slotLoadingLabel}>Añadiendo...</span>
+                      <span className={s.slotLoadingLabel}>{trc.addingLabel}</span>
                     </div>
                   ) : i === 0 ? (
                   <div
@@ -582,7 +675,7 @@ export default function CampaignDetailPage() {
                           strokeLinecap="round"
                         />
                       </svg>
-                      <span>Agregar aventurero</span>
+                      <span>{trc.addBtn}</span>
                     </button>
 
                     {dropOpen && (
@@ -590,37 +683,48 @@ export default function CampaignDetailPage() {
                         {available.length === 0 ? (
                           <div className={s.dropEmpty}>
                             {allChars.length === 0
-                              ? "No tienes personajes creados."
+                              ? trc.dropNoChars
                               : busyCharIds.size > 0
-                                ? "Todos tus personajes libres ya están en este grupo."
-                                : "Todos tus personajes ya están en el grupo."}
+                                ? trc.dropAllBusy
+                                : trc.dropAllIn}
                           </div>
                         ) : (
-                          available.map((c) => (
-                            <button
-                              key={c.id}
-                              className={s.dropOption}
-                              onClick={() => addCharacter(c.id)}
-                              disabled={!!pending}
-                              type="button"
-                            >
-                              <div className={s.dropAvatar}>
-                                {c.image_url ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={c.image_url} alt={c.name} className={s.dropAvatarImg} />
-                                ) : c.name[0].toUpperCase()}
-                              </div>
-                              <div className={s.dropInfo}>
-                                <div className={s.dropName}>{c.name}</div>
-                                <div className={s.dropMeta}>
-                                  {c.class} · Nv.{c.level}
+                          available.map((c) => {
+                            const blocked = needsSpellSetup(c);
+                            return (
+                              <button
+                                key={c.id}
+                                className={cx(s.dropOption, blocked && s.dropOptionBlocked)}
+                                onClick={() => !blocked && addCharacter(c.id)}
+                                disabled={!!pending || blocked}
+                                type="button"
+                                title={blocked ? trc.charSpellsTooltip : undefined}
+                              >
+                                <div className={s.dropAvatar}>
+                                  {c.image_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={c.image_url} alt={c.name} className={s.dropAvatarImg} />
+                                  ) : c.name[0].toUpperCase()}
                                 </div>
-                              </div>
-                              {pending === c.id && (
-                                <div className={s.dropSpinner}>···</div>
-                              )}
-                            </button>
-                          ))
+                                <div className={s.dropInfo}>
+                                  <div className={s.dropName}>{c.name}</div>
+                                  <div className={s.dropMeta}>
+                                    {classNames[c.class] ?? c.class} · {trc.levelAbbr}{c.level}
+                                    {blocked && <span className={s.dropWarn}> {trc.charSpellsWarn}</span>}
+                                  </div>
+                                </div>
+                                {blocked ? (
+                                  <svg width="13" height="13" viewBox="0 0 13 13" className={s.dropBlockIcon} aria-hidden>
+                                    <path d="M6.5 1.5 C6.5 1.5 11 4 11 7 Q11 10.5 6.5 11.5 Q2 10.5 2 7 C2 4 6.5 1.5 6.5 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.3"/>
+                                    <line x1="6.5" y1="4.5" x2="6.5" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                                    <circle cx="6.5" cy="9.5" r="0.7" fill="currentColor"/>
+                                  </svg>
+                                ) : pending === c.id ? (
+                                  <div className={s.dropSpinner}>···</div>
+                                ) : null}
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     )}
@@ -650,10 +754,10 @@ export default function CampaignDetailPage() {
                   <line x1="11" y1="1" x2="11" y2="5" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
                   <line x1="9" y1="3" x2="13" y2="3" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
                 </svg>
-                Solicitudes de Unión
+                {trc.joinRequestsTitle}
               </div>
               <span className={s.partyCount}>
-                {joinRequests.filter((r) => r.status === "pending").length} pendiente{joinRequests.filter((r) => r.status === "pending").length !== 1 ? "s" : ""}
+                {joinRequests.filter((r) => r.status === "pending").length} {joinRequests.filter((r) => r.status === "pending").length !== 1 ? trc.pendingMany : trc.pendingOne}
               </span>
             </div>
 
@@ -671,10 +775,10 @@ export default function CampaignDetailPage() {
                     <div className={s.requestUser}>
                       <span className={s.requestUsername}>{req.requester_username}</span>
                       {req.status === "accepted" && (
-                        <span className={cx(s.reqStatusBadge, s.reqBadgeAccepted)}>Aceptado</span>
+                        <span className={cx(s.reqStatusBadge, s.reqBadgeAccepted)}>{trc.statusAccepted}</span>
                       )}
                       {req.status === "rejected" && (
-                        <span className={cx(s.reqStatusBadge, s.reqBadgeRejected)}>Rechazado</span>
+                        <span className={cx(s.reqStatusBadge, s.reqBadgeRejected)}>{trc.statusRejected}</span>
                       )}
                     </div>
                     {req.character_name && (
@@ -690,7 +794,7 @@ export default function CampaignDetailPage() {
                       <p className={s.requestMsg}>&ldquo;{req.message}&rdquo;</p>
                     )}
                     <div className={s.requestDate}>
-                      {new Date(req.created_at).toLocaleDateString("es-ES", {
+                      {new Date(req.created_at).toLocaleDateString(trc.locale, {
                         day: "numeric", month: "short", year: "numeric",
                       })}
                     </div>
@@ -704,7 +808,7 @@ export default function CampaignDetailPage() {
                         disabled={processingReq === req.id}
                         type="button"
                       >
-                        {processingReq === req.id ? "···" : "Aceptar"}
+                        {processingReq === req.id ? "···" : trc.acceptBtn}
                       </button>
                       <button
                         className={s.btnReject}
@@ -712,7 +816,7 @@ export default function CampaignDetailPage() {
                         disabled={processingReq === req.id}
                         type="button"
                       >
-                        Rechazar
+                        {trc.rejectBtn}
                       </button>
                     </div>
                   )}
@@ -731,7 +835,7 @@ export default function CampaignDetailPage() {
                 <path d="M4 6V4.5a3 3 0 0 1 6 0V6" fill="none" stroke="#c9a030" strokeWidth="1.3" strokeLinecap="round" />
                 <circle cx="7" cy="9.5" r="1.1" fill="#c9a030" />
               </svg>
-              Código de Sala
+              {trc.roomCodeTitle}
             </div>
           </div>
           <div className={s.inviteBody}>
@@ -748,7 +852,7 @@ export default function CampaignDetailPage() {
                       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
                         <path d="M2 5l2.5 2.5 3.5-4.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      ¡Copiado!
+                      {trc.codeCopied}
                     </>
                   ) : (
                     <>
@@ -756,16 +860,16 @@ export default function CampaignDetailPage() {
                         <rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
                         <path d="M2 7V1h6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Copiar
+                      {trc.copyBtn}
                     </>
                   )}
                 </button>
                 <span className={s.inviteHint}>
-                  Comparte este código para que otros jugadores se unan directamente.
+                  {trc.inviteHint}
                 </span>
               </>
             ) : (
-              <span className={s.inviteGenerating}>Generando código…</span>
+              <span className={s.inviteGenerating}>{trc.generatingCode}</span>
             )}
           </div>
         </div>
@@ -774,7 +878,7 @@ export default function CampaignDetailPage() {
         <div className={s.cta}>
           {isStarted && (
             <p className={s.ctaStartedDate}>
-              Iniciada el {formatDate(campaign.started_at!)}
+              {trc.startedFmt.replace("{date}", formatDate(campaign.started_at!, trc.locale))}
             </p>
           )}
         </div>
