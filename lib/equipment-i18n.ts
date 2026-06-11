@@ -103,8 +103,29 @@ const EQUIPMENT_PT: Record<string, string> = {
   "Equipamiento inicial de clase (elegido)":     "Equipamento inicial de classe (escolhido)",
 };
 
+const GOLD_RE = /^(\d+)\s+piezas de oro$/i;
+const GOLD_DESC_RE = /^Oro inicial — trasfondo:\s*(.+)$/i;
+
+function translateDynamic(lang: string, esName: string): string | null {
+  const goldMatch = esName.match(GOLD_RE);
+  if (goldMatch) {
+    const n = goldMatch[1];
+    if (lang === "en") return `${n} gold pieces`;
+    if (lang === "pt") return `${n} peças de ouro`;
+    return null;
+  }
+  const descMatch = esName.match(GOLD_DESC_RE);
+  if (descMatch) {
+    const bg = descMatch[1];
+    if (lang === "en") return `Starting gold — background: ${bg}`;
+    if (lang === "pt") return `Ouro inicial — antecedentes: ${bg}`;
+    return null;
+  }
+  return null;
+}
+
 export function translateItem(lang: string, esName: string): string {
-  if (lang === "en") return EQUIPMENT_EN[esName] ?? esName;
-  if (lang === "pt") return EQUIPMENT_PT[esName] ?? esName;
+  if (lang === "en") return EQUIPMENT_EN[esName] ?? translateDynamic("en", esName) ?? esName;
+  if (lang === "pt") return EQUIPMENT_PT[esName] ?? translateDynamic("pt", esName) ?? esName;
   return esName;
 }

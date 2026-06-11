@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { GuildCampaign } from "@/types/join-request";
 
 // ── GET /api/guild ─────────────────────────────────────────────
-// Returns all campaigns from other users, with the current user's
-// request status for each.
+// Returns all public, not-yet-started campaigns from other users,
+// with the current user's request status for each.
 
 export async function GET() {
   const supabase = await createClient();
@@ -19,40 +20,53 @@ export async function GET() {
 
   const { data: campaigns, error: campError } = await supabase
     .from("campaigns")
-    .select("id, name, setting, tone, started_at, campaign_characters(character_id)")
+    .select("id, name, setting, tone, started_at")
     .neq("user_id", user.id)
     .eq("is_public", true)
+    .is("started_at", null)
     .order("created_at", { ascending: false });
 
   if (campError) {
     return NextResponse.json({ error: campError.message }, { status: 500 });
   }
 
-  const { data: myRequests } = await supabase
-    .from("campaign_join_requests")
-    .select("id, campaign_id, status")
-    .eq("requester_id", user.id);
+  const campaignIds = (campaigns ?? []).map((c) => c.id as string);
+
+  const [myRequestsResult, charCountResult] = await Promise.all([
+    supabase
+      .from("campaign_join_requests")
+      .select("id, campaign_id, status")
+      .eq("requester_id", user.id),
+    campaignIds.length > 0
+      ? createAdminClient()
+          .from("campaign_characters")
+          .select("campaign_id")
+          .in("campaign_id", campaignIds)
+      : Promise.resolve({ data: [] as Array<{ campaign_id: string }>, error: null }),
+  ]);
 
   const requestMap = new Map(
-    (myRequests ?? []).map((r) => [
+    (myRequestsResult.data ?? []).map((r) => [
       r.campaign_id as string,
       { id: r.id as string, status: r.status as JoinRequest["status"] },
     ]),
   );
 
-  const result: GuildCampaign[] = (campaigns ?? []).map((c) => {
-    const chars =
-      (c.campaign_characters as Array<{ character_id: string }>) ?? [];
-    return {
-      id: c.id as string,
-      name: c.name as string,
-      setting: c.setting as string,
-      tone: c.tone as string,
-      party_size: chars.length,
-      started_at: c.started_at as string | null,
-      my_request: requestMap.get(c.id as string) ?? null,
-    };
-  });
+  const sizeMap = new Map<string, number>();
+  for (const row of (charCountResult.data ?? [])) {
+    const cid = row.campaign_id as string;
+    sizeMap.set(cid, (sizeMap.get(cid) ?? 0) + 1);
+  }
+
+  const result: GuildCampaign[] = (campaigns ?? []).map((c) => ({
+    id: c.id as string,
+    name: c.name as string,
+    setting: c.setting as string,
+    tone: c.tone as string,
+    party_size: sizeMap.get(c.id as string) ?? 0,
+    started_at: c.started_at as string | null,
+    my_request: requestMap.get(c.id as string) ?? null,
+  }));
 
   return NextResponse.json(result);
 }
