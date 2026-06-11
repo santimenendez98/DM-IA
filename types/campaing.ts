@@ -14,7 +14,6 @@ export interface Campaign {
   setting: Setting;
   tone: Tone;
   system_prompt: string | null;
-  story_context: string | null;
   is_public: boolean;
   game_language: string;
   invite_code: string | null;
@@ -29,7 +28,6 @@ export type CreateCampaignInput = {
   setting: Setting;
   tone: Tone;
   system_prompt?: string;
-  story_context?: string;
   is_public?: boolean;
   game_language?: string;
 };

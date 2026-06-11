@@ -463,7 +463,7 @@ function mergeCampaigns(own: Campaign[], joined: SlimJoinedCampaign[]): Campaign
       .map((j) => ({
         ...j,
         character_ids: j.my_characters.map((c) => c.id),
-        user_id: "", system_prompt: null, story_context: null,
+        user_id: "", system_prompt: null,
         is_public: false, game_language: "es", invite_code: null,
         created_at: "", updated_at: "",
       } as Campaign)),
