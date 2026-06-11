@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { loader } from "@/lib/loader";
 import type { Character } from "@/types/character";
 import { cx } from "@/components/cx";
-import { KNOWN_CASTERS } from "@/app/data/spells";
+import { needsSpellSetup } from "@/app/data/spells";
 import { useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
 import s from "./join-by-code.module.css";
@@ -17,10 +17,6 @@ interface Props {
 }
 
 type Step = "form" | "success";
-
-function needsSpellSetup(c: Character): boolean {
-  return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
-}
 
 export default function JoinByCode({ open, onClose, onJoined }: Props) {
   const router = useRouter();

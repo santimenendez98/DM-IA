@@ -7,17 +7,17 @@ import { loader } from "@/lib/loader";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Character } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
-import { KNOWN_CASTERS } from "@/app/data/spells";
+import { needsSpellSetup } from "@/app/data/spells";
 import type { JoinRequest } from "@/types/join-request";
 import { cx } from "@/components/cx";
 import { useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
 import s from "./campaign-detail.module.css";
+import { statMod } from "@/lib/dnd-utils";
 
 // ── Constants ──────────────────────────────────────────────────
 
 const MAX_PARTY = 4;
-
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -26,11 +26,6 @@ interface CampaignDetail extends Campaign {
 }
 
 // ── Helpers ────────────────────────────────────────────────────
-
-function statMod(score: number): string {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
 
 function formatDate(iso: string, locale: string): string {
   return new Date(iso).toLocaleDateString(locale, {
@@ -397,10 +392,6 @@ export default function CampaignDetailPage() {
       .filter((c) => c.id !== campaign.id && c.started_at !== null)
       .flatMap((c) => c.character_ids ?? []),
   );
-
-  function needsSpellSetup(c: Character): boolean {
-    return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
-  }
 
   const available = allChars.filter(
     (c) => !partyIds.has(c.id) && !busyCharIds.has(c.id),

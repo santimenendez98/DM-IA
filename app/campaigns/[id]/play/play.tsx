@@ -15,6 +15,7 @@ import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
 import { cx } from "@/components/cx";
 import s from "./play.module.css";
+import { statMod, calculateAC, profBonus as calcProfBonus } from "@/lib/dnd-utils";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -121,17 +122,6 @@ function rollDice(notation: string): number {
   return total;
 }
 
-function calcProfBonus(level: number): number {
-  return Math.floor((level - 1) / 4) + 2;
-}
-
-// ── Helpers ────────────────────────────────────────────────────
-
-function statMod(score: number): string {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
-
 function fmtTime(iso: string, locale: string): string {
   return new Date(iso).toLocaleTimeString(locale, {
     hour: "2-digit", minute: "2-digit",
@@ -182,21 +172,7 @@ const CLASS_SAVES: Record<string, (keyof CharacterStats)[]> = {
 };
 
 function calcCharAC(character: Character): number {
-  const raw = (s: number) => Math.floor((s - 10) / 2);
-  const dex = raw(character.stats.dexterity);
-  const con = raw(character.stats.constitution);
-  const wis = raw(character.stats.wisdom);
-  const ns = character.items.map((i) => i.name.toLowerCase());
-  const has = (kw: string) => ns.some((n) => n.includes(kw.toLowerCase()));
-  const shield = has("escudo") ? 2 : 0;
-  if (has("cota de malla"))         return 16 + shield;
-  if (has("armadura de placas"))    return 18 + shield;
-  if (has("cota de escamas"))       return 14 + Math.min(dex, 2) + shield;
-  if (has("cuero tachonado"))       return 12 + dex + shield;
-  if (has("armadura de cuero"))     return 11 + dex + shield;
-  if (character.class === "Bárbaro") return 10 + dex + con;
-  if (character.class === "Monje")   return 10 + dex + wis;
-  return 10 + dex + shield;
+  return calculateAC(character);
 }
 
 // ── Character sheet modal ──────────────────────────────────────

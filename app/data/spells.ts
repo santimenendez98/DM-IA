@@ -1,4 +1,5 @@
 // D&D 5e SRD spell data (Basic Rules subset, translated to Spanish)
+import type { Character } from "@/types/character";
 
 export type Spell = {
   name: string;
@@ -526,3 +527,7 @@ export const SPELL_GAINS: Record<string, Record<number, SpellGain>> = {
     20: { newSpells: 0, newCantrips: 0, maxLevel: 5, canReplace: false },
   },
 };
+
+export function needsSpellSetup(c: Character): boolean {
+  return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
+}
