@@ -49,7 +49,6 @@ function buildSystemInstruction(
     setting: string;
     tone: string;
     system_prompt: string | null;
-    story_context?: string | null;
   },
   characters: Character[],
   lang: Lang = "es",
