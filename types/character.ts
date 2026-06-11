@@ -36,6 +36,8 @@ export interface Character {
   alignment: string | null;
   skill_proficiencies: string[];
   spells_known: CharacterSpell[];
+  spell_slots_used: Record<string, number>;
+  hit_dice_used: number;
   level_up_authorized: boolean;
   created_at: string;
   updated_at: string;

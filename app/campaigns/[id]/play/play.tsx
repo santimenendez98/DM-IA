@@ -9,6 +9,7 @@ import { langStore, useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
 import { translateItem } from "@/lib/equipment-i18n";
 import { translateSpell } from "@/lib/spell-i18n";
+import { getMaxSpellSlots, hasSpellSlots, isWarlock, getHitDie } from "@/lib/spell-slots";
 import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
@@ -39,6 +40,18 @@ interface ItemGrantItem {
   character_name: string;
   item: string;
   description: string;
+}
+
+interface HitDiceUpdateItem {
+  character_id: string;
+  name: string;
+  hit_dice_used: number;
+}
+
+interface SlotUpdateItem {
+  character_id: string;
+  name: string;
+  spell_slots_used: Record<string, number>;
 }
 
 // ── Constants ──────────────────────────────────────────────────
@@ -193,11 +206,13 @@ function CharacterSheetModal({
   color,
   onClose,
   onStatRoll,
+  isOwner,
 }: {
   character: Character;
   color: string;
   onClose: () => void;
   onStatRoll?: (stat: keyof CharacterStats, score: number) => void;
+  isOwner?: boolean;
 }) {
   const { lang } = useLang();
   const tr     = t[lang].play;
@@ -354,6 +369,66 @@ function CharacterSheetModal({
             </ul>
           </div>
         )}
+
+        {/* Hit dice */}
+        {(() => {
+          const hitDie  = getHitDie(character.class);
+          const hdTotal = character.level;
+          const hdUsed  = character.hit_dice_used ?? 0;
+          const hdAvail = hdTotal - hdUsed;
+          return (
+            <div className={s.sheetSection}>
+              <div className={s.sheetSectionTitle}>{tr.hitDice as string}</div>
+              <div className={s.sheetSlotRow}>
+                <span className={s.sheetSlotLabel}>d{hitDie}</span>
+                <div className={s.sheetSlotPips}>
+                  {Array.from({ length: hdTotal }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={cx(s.sheetSlotPip, i < hdUsed ? s.slotUsed : s.slotAvail)}
+                    />
+                  ))}
+                </div>
+                <span className={s.sheetSlotCount}>{hdAvail}/{hdTotal}</span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Spell slots */}
+        {hasSpellSlots(character.class) && (() => {
+          const maxSlots  = getMaxSpellSlots(character.class, character.level);
+          const usedSlots = character.spell_slots_used ?? {};
+          const levels    = Object.keys(maxSlots).map(Number).sort((a, b) => a - b);
+          if (!levels.length) return null;
+          const warlockChar = isWarlock(character.class);
+          return (
+            <div className={s.sheetSection}>
+              <div className={s.sheetSectionTitle}>{tr.sheetSlots}</div>
+              {levels.map((lvl) => {
+                const max  = maxSlots[lvl];
+                const used = usedSlots[String(lvl)] ?? 0;
+                const label = warlockChar
+                  ? tr.pactMagic
+                  : (tr.slotLevelFmt as string).replace("{n}", String(lvl));
+                return (
+                  <div key={lvl} className={s.sheetSlotRow}>
+                    <span className={s.sheetSlotLabel}>{label}</span>
+                    <div className={s.sheetSlotPips}>
+                      {Array.from({ length: max }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={cx(s.sheetSlotPip, i < used ? s.slotUsed : s.slotAvail)}
+                        />
+                      ))}
+                    </div>
+                    <span className={s.sheetSlotCount}>{max - used}/{max}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Spells */}
         {(character.spells_known ?? []).length > 0 && (
@@ -636,18 +711,18 @@ function RollsPanel({
                     )}
                   </div>
                 )}
-                {isMine ? (
+                {!done && (isMine ? (
                   <button
                     className={cx(s.rollItemBtn, rolling[i] && s.rollItemBtnRolling)}
                     onClick={() => handleRoll(i)}
                     disabled={disabled || rolling[i]}
                     type="button"
                   >
-                    {rolling[i] ? "···" : !done ? tr.rollBtn.replace("{n}", r.dado) : tr.rerollBtn}
+                    {rolling[i] ? "···" : tr.rollBtn.replace("{n}", r.dado)}
                   </button>
-                ) : !done ? (
+                ) : (
                   <span className={s.rollItemWaiting}>{tr.rollWaiting}</span>
-                ) : null}
+                ))}
               </div>
             </div>
           );
@@ -1291,6 +1366,7 @@ export default function Play() {
       // Players receive it via polling once it's saved to the database.
       if (msgs.length === 0 && camp.user_id === u.id) {
         setDmThinking(true);
+        channelRef.current?.send({ type: "broadcast", event: "dm_thinking", payload: {} });
         try {
           const introRes = await fetch(`/api/campaigns/${camp.id}/messages`, {
             method: "POST",
@@ -1390,6 +1466,37 @@ export default function Play() {
     setItemGrantQueue(grants);
   }, []);
 
+  // ── Apply spell cast slot deductions from DM marker ─────────
+
+  const applySlotUpdates = useCallback((updates: SlotUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const update = updates.find((u) => u.character_id === c.id);
+          return update ? { ...c, spell_slots_used: update.spell_slots_used } : c;
+        }),
+      };
+    });
+  }, []);
+
+  const applyHitDiceUpdates = useCallback((updates: HitDiceUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const update = updates.find((u) => u.character_id === c.id);
+          return update ? { ...c, hit_dice_used: update.hit_dice_used } : c;
+        }),
+      };
+    });
+  }, []);
+
+
   // ── Rate limit countdown (shared by sender + broadcast receivers) ─
 
   const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
@@ -1462,10 +1569,12 @@ export default function Play() {
         setItemGrantQueue([]);
       })
       .on("broadcast", { event: "dm_response" }, ({ payload }: { payload: unknown }) => {
-        const { hp_updates, level_updates, item_grants, ...msg } = payload as Message & {
+        const { hp_updates, level_updates, item_grants, slot_updates, hd_updates, ...msg } = payload as Message & {
           hp_updates?: HpUpdateItem[];
           level_updates?: LevelUpItem[];
           item_grants?: ItemGrantItem[];
+          slot_updates?: SlotUpdateItem[];
+          hd_updates?: HitDiceUpdateItem[];
         };
         setMessages((prev) => {
           if (prev.some((m) => m.id === (msg as Message).id)) return prev;
@@ -1475,6 +1584,17 @@ export default function Play() {
         if (hp_updates?.length) applyHpUpdates(hp_updates);
         if (level_updates?.length) applyLevelUpdates(level_updates);
         if (item_grants?.length) applyItemGrants(item_grants);
+        if (slot_updates?.length) applySlotUpdates(slot_updates);
+        if (hd_updates?.length) applyHitDiceUpdates(hd_updates);
+      })
+      .on("broadcast", { event: "slot_update" }, ({ payload }: { payload: unknown }) => {
+        const { character_id, spell_slots_used } = payload as { character_id: string; spell_slots_used: Record<string, number> };
+        setCampaign((prev) => prev ? {
+          ...prev,
+          characters: prev.characters.map((c) =>
+            c.id === character_id ? { ...c, spell_slots_used } : c,
+          ),
+        } : prev);
       })
       // ── Broadcast: player typing indicators ──────────────────
       .on("broadcast", { event: "typing_start" }, ({ payload }: { payload: unknown }) => {
@@ -1740,7 +1860,12 @@ export default function Play() {
     setInput("");
     setSendError(null);
     setSending(true);
-    if (withDm) { setDmThinking(true); setLevelUpQueue([]); setItemGrantQueue([]); }
+    if (withDm) {
+      setDmThinking(true);
+      setLevelUpQueue([]);
+      setItemGrantQueue([]);
+      channelRef.current?.send({ type: "broadcast", event: "dm_thinking", payload: {} });
+    }
 
     try {
       const res = await fetch(`/api/campaigns/${campaign.id}/messages`, {
@@ -1764,6 +1889,8 @@ export default function Play() {
         hp_updates?: HpUpdateItem[];
         level_updates?: LevelUpItem[];
         item_grants?: ItemGrantItem[];
+        slot_updates?: SlotUpdateItem[];
+        hd_updates?: HitDiceUpdateItem[];
       };
 
       setMessages((prev) => {
@@ -1776,7 +1903,9 @@ export default function Play() {
 
       if (data.hp_updates?.length) applyHpUpdates(data.hp_updates);
       if (data.level_updates?.length) applyLevelUpdates(data.level_updates);
-      if (data.item_grants?.length) applyItemGrants(data.item_grants);
+      // item_grants applied via broadcast only — avoids double-append on the sender
+      if (data.slot_updates?.length) applySlotUpdates(data.slot_updates);
+      if (data.hd_updates?.length) applyHitDiceUpdates(data.hd_updates);
 
       if (data.dm_error === "rate_limit") {
         const limitType = data.limit_type ?? "minute";
@@ -2203,13 +2332,16 @@ export default function Play() {
 
         {/* Character sheet modal */}
         {sheetChar && (() => {
-          const idx = campaign.characters.findIndex((c) => c.id === sheetChar.id);
+          const idx      = campaign.characters.findIndex((c) => c.id === sheetChar.id);
+          const liveChar = campaign.characters[idx] ?? sheetChar;
+          const owner    = liveChar.user_id === userId;
           return (
             <CharacterSheetModal
-              character={sheetChar}
+              character={liveChar}
               color={AVATAR_COLORS[idx >= 0 ? idx % AVATAR_COLORS.length : 0]}
               onClose={() => setSheetChar(null)}
-              onStatRoll={sheetChar.user_id === userId ? handleStatRoll : undefined}
+              onStatRoll={owner ? handleStatRoll : undefined}
+              isOwner={owner}
             />
           );
         })()}
