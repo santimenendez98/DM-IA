@@ -87,7 +87,7 @@ export default function GuildExplorer({ open, onClose }: Props) {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "campaigns" },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const updated = payload.new as { id: string; started_at: string | null };
           if (updated.started_at) {
             setCampaigns((prev) => prev.filter((c) => c.id !== updated.id));

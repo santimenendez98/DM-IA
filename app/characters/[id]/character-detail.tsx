@@ -540,7 +540,7 @@ export default function CharacterDetail() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "characters", filter: `id=eq.${id}` },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           setCharacter((prev) => prev ? { ...prev, ...(payload.new as Partial<Character>) } : prev);
         },
       )

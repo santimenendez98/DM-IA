@@ -9,7 +9,7 @@ import { langStore, useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
 import { translateItem } from "@/lib/equipment-i18n";
 import { translateSpell } from "@/lib/spell-i18n";
-import type { Character, CharacterStats, CharacterItem, CharacterSpell } from "@/types/character";
+import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
 import { cx } from "@/components/cx";
@@ -1336,6 +1336,97 @@ export default function Play() {
     isFirstScroll.current = false;
   }, [messages, dmThinking, loading]);
 
+  // ── Apply HP updates to local campaign state ──────────────────
+
+  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, hp: upd.hp } : c;
+        }),
+      };
+    });
+  }, []);
+
+  // ── Apply level-up updates to local campaign state ────────────
+
+  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, level: upd.level } : c;
+        }),
+      };
+    });
+    setLevelUpQueue(updates);
+  }, []);
+
+  // ── Apply item grants to local campaign state ─────────────────
+
+  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
+    if (!grants.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const newItems = grants
+            .filter((g) => g.character_id === c.id)
+            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
+          return newItems.length > 0
+            ? { ...c, items: [...(c.items ?? []), ...newItems] }
+            : c;
+        }),
+      };
+    });
+    setItemGrantQueue(grants);
+  }, []);
+
+  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
+
+  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
+    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
+    setRateLimitType(limitType);
+
+    if (limitType === "day" || secs === 0) {
+      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
+      setRateLimitSecsLeft(0);
+      setActCooldown(30);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else {
+      setRateLimitSecsLeft(secs);
+      setActCooldown(secs);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setRateLimitSecsLeft((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+        setActCooldown((c) => Math.max(0, c - 1));
+      }, 1000);
+    }
+  }, []);
+
   // ── Realtime channel ──────────────────────────────────────────
   // • Postgres Changes on campaign_messages → live messages for all clients
   // • Presence → detect when DM leaves the session
@@ -1805,7 +1896,7 @@ export default function Play() {
 
     if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
     if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
-    setActiveVote(null);
+    setActiveVote(null);   // eslint-disable-line react-hooks/set-state-in-effect
     setVoteCountdown(0);
 
     if (approved && userIdRef.current === proposer_id) {
@@ -1840,99 +1931,8 @@ export default function Play() {
         label: tr.rollStatFmt.replace("{n}", STAT_ABBR[stat]),
       });
     },
-    [],
+    [tr.rollStatFmt],
   );
-
-  // ── Apply HP updates to local campaign state ──────────────────
-
-  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
-    if (!updates.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const upd = updates.find((u) => u.character_id === c.id);
-          return upd ? { ...c, hp: upd.hp } : c;
-        }),
-      };
-    });
-  }, []);
-
-  // ── Apply level-up updates to local campaign state ────────────
-
-  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
-    if (!updates.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const upd = updates.find((u) => u.character_id === c.id);
-          return upd ? { ...c, level: upd.level } : c;
-        }),
-      };
-    });
-    setLevelUpQueue(updates);
-  }, []);
-
-  // ── Apply item grants to local campaign state ─────────────────
-
-  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
-    if (!grants.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const newItems = grants
-            .filter((g) => g.character_id === c.id)
-            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
-          return newItems.length > 0
-            ? { ...c, items: [...(c.items ?? []), ...newItems] }
-            : c;
-        }),
-      };
-    });
-    setItemGrantQueue(grants);
-  }, []);
-
-  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
-
-  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
-    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
-    setRateLimitType(limitType);
-
-    if (limitType === "day" || secs === 0) {
-      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
-      setRateLimitSecsLeft(0);
-      setActCooldown(30);
-      rateLimitIntervalRef.current = setInterval(() => {
-        setActCooldown((c) => {
-          if (c <= 1) {
-            clearInterval(rateLimitIntervalRef.current!);
-            setRateLimitType(null);
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
-    } else {
-      setRateLimitSecsLeft(secs);
-      setActCooldown(secs);
-      rateLimitIntervalRef.current = setInterval(() => {
-        setRateLimitSecsLeft((c) => {
-          if (c <= 1) {
-            clearInterval(rateLimitIntervalRef.current!);
-            setRateLimitType(null);
-            return 0;
-          }
-          return c - 1;
-        });
-        setActCooldown((c) => Math.max(0, c - 1));
-      }, 1000);
-    }
-  }, []);
 
   // ── Player roll handler (broadcasts to other players) ─────
 
