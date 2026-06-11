@@ -13,11 +13,7 @@ import { getRaceI18n, getClassI18n, getEquipLabel, getBgI18n, getAlignI18n } fro
 import { getClassFeatures } from "@/lib/dnd-i18n";
 import { translateItem } from "@/lib/equipment-i18n";
 import s from "./new-character.module.css";
-
-// ── Helpers ────────────────────────────────────────────────────
-
-function mod(score: number): number { return Math.floor((score - 10) / 2); }
-function modStr(score: number): string { const m = mod(score); return m >= 0 ? `+${m}` : `${m}`; }
+import { rawMod as mod, statMod as modStr } from "@/lib/dnd-utils";
 
 // ── D&D Data ───────────────────────────────────────────────────
 
