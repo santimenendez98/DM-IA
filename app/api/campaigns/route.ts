@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, setting, tone, system_prompt, is_public } =
+  const { name, setting, tone, system_prompt, story_context, is_public, game_language } =
     body as Partial<CreateCampaignInput>;
 
   const fieldErrors: Record<string, string> = {};
@@ -97,7 +97,9 @@ export async function POST(req: Request) {
       setting,
       tone,
       system_prompt: system_prompt?.trim() ?? null,
+      story_context: story_context?.trim() ?? null,
       is_public: is_public ?? false,
+      game_language: ["es", "en", "pt"].includes(game_language ?? "") ? game_language : "es",
     })
     .select()
     .single();

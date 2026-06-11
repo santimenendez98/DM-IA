@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { loader } from "@/lib/loader";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Character, CharacterStats, CharacterSpell } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import { cx } from "@/components/cx";
@@ -446,6 +447,29 @@ function parseBackstory(raw: string | null): string {
 }
 
 
+// ── Helpers ────────────────────────────────────────────────────
+
+type SlimJoinedCampaign = {
+  id: string; name: string; setting: string; tone: string;
+  started_at: string | null; my_characters: Array<{ id: string }>;
+};
+
+function mergeCampaigns(own: Campaign[], joined: SlimJoinedCampaign[]): Campaign[] {
+  const ownIds = new Set(own.map((c) => c.id));
+  return [
+    ...own,
+    ...joined
+      .filter((j) => !ownIds.has(j.id))
+      .map((j) => ({
+        ...j,
+        character_ids: j.my_characters.map((c) => c.id),
+        user_id: "", system_prompt: null, story_context: null,
+        is_public: false, game_language: "es", invite_code: null,
+        created_at: "", updated_at: "",
+      } as Campaign)),
+  ];
+}
+
 // ── Component ──────────────────────────────────────────────────
 
 export default function CharacterDetail() {
@@ -489,21 +513,53 @@ export default function CharacterDetail() {
   useEffect(() => {
     getCurrUser().then(async (u) => {
       if (!u) { router.replace("/auth/login"); return; }
-      const [charRes, campRes] = await Promise.all([
+      const [charRes, campRes, joinedRes] = await Promise.all([
         fetch(`/api/characters/${id}`),
         fetch("/api/campaigns"),
+        fetch("/api/campaigns/joined"),
       ]);
       if (!charRes.ok) { loader.stop(); setNotFound(true); setLoading(false); return; }
-      const [char, camps] = await Promise.all([
+      const [char, camps, joined] = await Promise.all([
         charRes.json() as Promise<Character>,
         campRes.ok ? (campRes.json() as Promise<Campaign[]>) : Promise.resolve([]),
+        joinedRes.ok ? (joinedRes.json() as Promise<SlimJoinedCampaign[]>) : Promise.resolve([]),
       ]);
       setCharacter(char);
-      setCampaigns(camps);
+      setCampaigns(mergeCampaigns(camps, joined));
       loader.stop();
       setLoading(false);
     });
   }, [id, router]);
+
+  // Real-time: character row changes (items, HP, level) + campaign membership changes
+  useEffect(() => {
+    if (!id) return;
+    const supabase = createSupabaseClient();
+    const channel = supabase
+      .channel(`char-detail-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "characters", filter: `id=eq.${id}` },
+        (payload: { new: Record<string, unknown> }) => {
+          setCharacter((prev) => prev ? { ...prev, ...(payload.new as Partial<Character>) } : prev);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "campaign_characters", filter: `character_id=eq.${id}` },
+        async () => {
+          const [campRes, joinedRes] = await Promise.all([
+            fetch("/api/campaigns", { cache: "no-store" }),
+            fetch("/api/campaigns/joined", { cache: "no-store" }),
+          ]);
+          const camps: Campaign[] = campRes.ok ? await campRes.json() : [];
+          const joined: SlimJoinedCampaign[] = joinedRes.ok ? await joinedRes.json() : [];
+          setCampaigns(mergeCampaigns(camps, joined));
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
 
   // ── Spell picker memos (must be before any early return) ─────
 

@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { loader } from "@/lib/loader";
 import { langStore, useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
+import { translateItem } from "@/lib/equipment-i18n";
+import { translateSpell } from "@/lib/spell-i18n";
 import type { Character, CharacterStats, CharacterItem } from "@/types/character";
 import type { Campaign } from "@/types/campaing";
 import type { Message } from "@/types/message";
@@ -123,38 +125,301 @@ function fmtTime(iso: string, locale: string): string {
   });
 }
 
+// ── Character sheet helpers ────────────────────────────────────
+
+const SHEET_SKILLS: { name: string; stat: keyof CharacterStats }[] = [
+  { name: "Acrobacias",         stat: "dexterity"    },
+  { name: "Manejo de Animales", stat: "wisdom"       },
+  { name: "Arcanos",            stat: "intelligence" },
+  { name: "Atletismo",          stat: "strength"     },
+  { name: "Engaño",             stat: "charisma"     },
+  { name: "Historia",           stat: "intelligence" },
+  { name: "Perspicacia",        stat: "wisdom"       },
+  { name: "Intimidación",       stat: "charisma"     },
+  { name: "Investigación",      stat: "intelligence" },
+  { name: "Medicina",           stat: "wisdom"       },
+  { name: "Naturaleza",         stat: "intelligence" },
+  { name: "Percepción",         stat: "wisdom"       },
+  { name: "Interpretación",     stat: "charisma"     },
+  { name: "Persuasión",         stat: "charisma"     },
+  { name: "Religión",           stat: "intelligence" },
+  { name: "Juego de Manos",     stat: "dexterity"    },
+  { name: "Sigilo",             stat: "dexterity"    },
+  { name: "Supervivencia",      stat: "wisdom"       },
+];
+
+const SAVE_STATS: (keyof CharacterStats)[] = [
+  "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma",
+];
+
+// Saving throw proficiency by class (primary saves)
+const CLASS_SAVES: Record<string, (keyof CharacterStats)[]> = {
+  "Guerrero":    ["strength",     "constitution"],
+  "Mago":        ["intelligence", "wisdom"],
+  "Clérigo":     ["wisdom",       "charisma"],
+  "Pícaro":      ["dexterity",    "intelligence"],
+  "Bárbaro":     ["strength",     "constitution"],
+  "Bardo":       ["dexterity",    "charisma"],
+  "Druida":      ["intelligence", "wisdom"],
+  "Monje":       ["strength",     "dexterity"],
+  "Paladín":     ["wisdom",       "charisma"],
+  "Explorador":  ["strength",     "dexterity"],
+  "Hechicero":   ["constitution", "charisma"],
+  "Brujo":       ["wisdom",       "charisma"],
+};
+
+function calcCharAC(character: Character): number {
+  const raw = (s: number) => Math.floor((s - 10) / 2);
+  const dex = raw(character.stats.dexterity);
+  const con = raw(character.stats.constitution);
+  const wis = raw(character.stats.wisdom);
+  const ns = character.items.map((i) => i.name.toLowerCase());
+  const has = (kw: string) => ns.some((n) => n.includes(kw.toLowerCase()));
+  const shield = has("escudo") ? 2 : 0;
+  if (has("cota de malla"))         return 16 + shield;
+  if (has("armadura de placas"))    return 18 + shield;
+  if (has("cota de escamas"))       return 14 + Math.min(dex, 2) + shield;
+  if (has("cuero tachonado"))       return 12 + dex + shield;
+  if (has("armadura de cuero"))     return 11 + dex + shield;
+  if (character.class === "Bárbaro") return 10 + dex + con;
+  if (character.class === "Monje")   return 10 + dex + wis;
+  return 10 + dex + shield;
+}
+
+// ── Character sheet modal ──────────────────────────────────────
+
+function CharacterSheetModal({
+  character,
+  color,
+  onClose,
+  onStatRoll,
+}: {
+  character: Character;
+  color: string;
+  onClose: () => void;
+  onStatRoll?: (stat: keyof CharacterStats, score: number) => void;
+}) {
+  const { lang } = useLang();
+  const tr     = t[lang].play;
+  const trChar = t[lang].character;
+  const statAbbrMap  = trChar.statAbbr      as unknown as Record<string, string>;
+  const classNames   = trChar.classNames    as unknown as Record<string, string>;
+  const raceNames    = trChar.raceNames     as unknown as Record<string, string>;
+  const bgNames      = trChar.bgNames       as unknown as Record<string, string>;
+  const alignNames   = trChar.alignmentNames as unknown as Record<string, string>;
+  const skillNamesMap = trChar.skillNames   as unknown as Record<string, string>;
+
+  const rawMod    = (s: number) => Math.floor((s - 10) / 2);
+  const fmtMod    = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+  const profBonus = calcProfBonus(character.level);
+  const hpPct     = Math.min(100, Math.round((character.hp / character.max_hp) * 100));
+  const ac        = calcCharAC(character);
+  const initMod   = rawMod(character.stats.dexterity);
+  const profSet   = new Set(character.skill_proficiencies ?? []);
+  const saveProfSet = new Set(CLASS_SAVES[character.class] ?? []);
+
+  return (
+    <div className={s.sheetOverlay} onClick={onClose}>
+      <div className={s.sheetModal} onClick={(e) => e.stopPropagation()}>
+
+        {/* Close */}
+        <button type="button" className={s.sheetClose} onClick={onClose} aria-label={tr.sheetClose}>✕</button>
+
+        {/* Header */}
+        <div className={s.sheetHeader}>
+          <div className={s.sheetAvatar} style={character.image_url ? {} : { background: color }}>
+            {character.image_url
+              ? <img src={character.image_url} alt={character.name} className={s.sheetAvatarImg} />
+              : character.name[0].toUpperCase()}
+          </div>
+          <div className={s.sheetHeaderInfo}>
+            <div className={s.sheetName}>{character.name}</div>
+            <div className={s.sheetBadgeRow}>
+              <span className={s.sheetBadge}>{classNames[character.class] ?? character.class}</span>
+              <span className={s.sheetBadge}>{tr.levelAbbr}{character.level}</span>
+              {character.race      && <span className={s.sheetBadge}>{raceNames[character.race]      ?? character.race}</span>}
+              {character.background && <span className={s.sheetBadge}>{bgNames[character.background] ?? character.background}</span>}
+              {character.alignment && <span className={s.sheetBadge}>{alignNames[character.alignment] ?? character.alignment}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* HP */}
+        <div className={s.sheetHpSection}>
+          <span className={s.sheetHpLabel}>{tr.hpAbbr}</span>
+          <div className={s.sheetHpBar}>
+            <div
+              className={cx(s.sheetHpFill, hpPct <= 25 ? s.hpDanger : hpPct <= 50 ? s.hpWarn : s.hpFull)}
+              style={{ width: `${hpPct}%` }}
+            />
+          </div>
+          <span className={s.sheetHpNums}>{character.hp} / {character.max_hp}</span>
+        </div>
+
+        {/* Combat strip */}
+        <div className={s.sheetCombat}>
+          <div className={s.sheetCombatCell}>
+            <div className={s.sheetCombatVal}>{ac}</div>
+            <div className={s.sheetCombatLbl}>{trChar.cardAC}</div>
+          </div>
+          <div className={s.sheetCombatCell}>
+            <div className={s.sheetCombatVal}>{fmtMod(initMod)}</div>
+            <div className={s.sheetCombatLbl}>{trChar.cardInitiative}</div>
+          </div>
+          <div className={s.sheetCombatCell}>
+            <div className={s.sheetCombatVal}>{fmtMod(profBonus)}</div>
+            <div className={s.sheetCombatLbl}>{trChar.cardProfBonus}</div>
+          </div>
+        </div>
+
+        {/* Attributes */}
+        <div className={s.sheetSection}>
+          <div className={s.sheetSectionTitle}>{trChar.cardStats}</div>
+          <div className={s.sheetStatsGrid}>
+            {STAT_KEYS.map((k) => {
+              const score = character.stats[k];
+              const mod   = rawMod(score);
+              const abbr  = statAbbrMap[k] ?? STAT_ABBR[k];
+              return (
+                <div
+                  key={k}
+                  className={cx(s.sheetStatCell, onStatRoll && s.sheetStatCellRollable)}
+                  onClick={() => onStatRoll?.(k, score)}
+                  role={onStatRoll ? "button" : undefined}
+                  title={onStatRoll ? tr.rollStatFmt.replace("{n}", abbr) : undefined}
+                >
+                  <div className={s.sheetStatAbbr}>{abbr}</div>
+                  <div className={s.sheetStatScore}>{score}</div>
+                  <div className={cx(s.sheetStatMod, mod > 0 ? s.modPos : mod < 0 ? s.modNeg : s.modZero)}>
+                    {fmtMod(mod)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Saving throws */}
+        <div className={s.sheetSection}>
+          <div className={s.sheetSectionTitle}>{tr.sheetSaving}</div>
+          <div className={s.sheetSavesGrid}>
+            {SAVE_STATS.map((k) => {
+              const prof = saveProfSet.has(k);
+              const mod  = rawMod(character.stats[k]) + (prof ? profBonus : 0);
+              const abbr = statAbbrMap[k] ?? STAT_ABBR[k];
+              return (
+                <div key={k} className={s.sheetSkillRow}>
+                  <span className={cx(s.sheetSkillDot, prof && s.sheetSkillDotProf)} />
+                  <span className={s.sheetSkillName}>{abbr}</span>
+                  <span className={cx(s.sheetSkillMod, mod > 0 ? s.modPos : mod < 0 ? s.modNeg : s.modZero)}>
+                    {fmtMod(mod)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Skills */}
+        <div className={s.sheetSection}>
+          <div className={s.sheetSectionTitle}>{trChar.cardSkills}</div>
+          <div className={s.sheetSkillsGrid}>
+            {SHEET_SKILLS.map((sk) => {
+              const prof = profSet.has(sk.name);
+              const mod  = rawMod(character.stats[sk.stat]) + (prof ? profBonus : 0);
+              return (
+                <div key={sk.name} className={s.sheetSkillRow}>
+                  <span className={cx(s.sheetSkillDot, prof && s.sheetSkillDotProf)} />
+                  <span className={s.sheetSkillName}>{skillNamesMap[sk.name] ?? sk.name}</span>
+                  <span className={cx(s.sheetSkillMod, mod > 0 ? s.modPos : mod < 0 ? s.modNeg : s.modZero)}>
+                    {fmtMod(mod)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Inventory */}
+        {(character.items ?? []).length > 0 && (
+          <div className={s.sheetSection}>
+            <div className={s.sheetSectionTitle}>{trChar.cardInventory}</div>
+            <ul className={s.sheetItemsList}>
+              {character.items.map((item, i) => (
+                <li key={i} className={s.sheetItemRow}>
+                  <span className={s.sheetItemDot}>·</span>
+                  <span className={s.sheetItemName}>{translateItem(lang, item.name)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Spells */}
+        {(character.spells_known ?? []).length > 0 && (
+          <div className={s.sheetSection}>
+            <div className={s.sheetSectionTitle}>{trChar.cardSpells}</div>
+            {[0, 1, 2, 3, 4, 5].map((lvl) => {
+              const lvlSpells = (character.spells_known ?? []).filter((sp) => sp.level === lvl);
+              if (!lvlSpells.length) return null;
+              const label = lvl === 0
+                ? trChar.spellGroupCantrips
+                : (trChar.spellGroupLevelFmt as string).replace("{n}", String(lvl));
+              return (
+                <div key={lvl} className={s.sheetSpellGroup}>
+                  <div className={s.sheetSpellGroupLabel}>{label}</div>
+                  {lvlSpells.map((sp) => {
+                    const spTr = translateSpell(lang, sp.name, sp.school, sp.desc);
+                    return (
+                      <div key={sp.name} className={s.sheetSpellRow}>
+                        <span className={s.sheetSpellName}>{spTr.name}</span>
+                        <span className={s.sheetSpellSchool}>{spTr.school}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 // ── Character card (sidebar) ───────────────────────────────────
 
 function CharacterCard({
   character,
   color,
   active,
-  onClick,
-  onStatRoll,
+  onOpenSheet,
 }: {
   character: Character;
   color: string;
   active: boolean;
-  onClick: () => void;
-  onStatRoll?: (stat: keyof CharacterStats, score: number) => void;
+  onOpenSheet: () => void;
 }) {
   const { lang } = useLang();
-  const tr = t[lang].play;
+  const tr          = t[lang].play;
+  const statAbbrMap = t[lang].character.statAbbr  as unknown as Record<string, string>;
+  const classNames  = t[lang].character.classNames as unknown as Record<string, string>;
   const hpPct = Math.min(100, Math.round((character.hp / character.max_hp) * 100));
 
   return (
-    <div className={cx(s.charCard, active && s.charCardActive)} onClick={onClick}>
+    <div className={cx(s.charCard, active && s.charCardActive)} onClick={onOpenSheet}>
       <div className={s.charTop}>
         <div className={s.charAvatar} style={character.image_url ? {} : { background: color }}>
-          {character.image_url ? (
+          {character.image_url
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={character.image_url} alt={character.name} className={s.charAvatarImg} />
-          ) : character.name[0].toUpperCase()}
+            ? <img src={character.image_url} alt={character.name} className={s.charAvatarImg} />
+            : character.name[0].toUpperCase()}
         </div>
         <div className={s.charInfo}>
           <div className={s.charName}>{character.name}</div>
           <div className={s.charMeta}>
-            <span className={s.charBadge}>{character.class}</span>
+            <span className={s.charBadge}>{classNames[character.class] ?? character.class}</span>
             <span className={s.charBadge}>{tr.levelAbbr}{character.level}</span>
           </div>
         </div>
@@ -165,10 +430,7 @@ function CharacterCard({
         <span className={s.charHpLabel}>{tr.hpAbbr}</span>
         <div className={s.charHpBar}>
           <div
-            className={cx(
-              s.charHpFill,
-              hpPct <= 25 ? s.hpDanger : hpPct <= 50 ? s.hpWarn : s.hpFull,
-            )}
+            className={cx(s.charHpFill, hpPct <= 25 ? s.hpDanger : hpPct <= 50 ? s.hpWarn : s.hpFull)}
             style={{ width: `${hpPct}%` }}
           />
         </div>
@@ -178,51 +440,18 @@ function CharacterCard({
       <div className={s.statsGrid}>
         {STAT_KEYS.map((k) => {
           const score = character.stats[k];
-          const mod = statMod(score);
+          const mod   = statMod(score);
           const pos = score > 10, neg = score < 10;
+          const abbr  = statAbbrMap[k] ?? STAT_ABBR[k];
           return (
-            <div
-              key={k}
-              className={cx(s.statCell, onStatRoll && s.statCellRollable)}
-              onClick={() => onStatRoll?.(k, score)}
-              role={onStatRoll ? "button" : undefined}
-              title={onStatRoll ? tr.rollStatFmt.replace("{n}", STAT_ABBR[k]) : undefined}
-            >
-              <span className={s.statAbbr}>{STAT_ABBR[k]}</span>
+            <div key={k} className={s.statCell}>
+              <span className={s.statAbbr}>{abbr}</span>
               <span className={s.statVal}>{score}</span>
-              <span className={cx(s.statMod, pos ? s.modPos : neg ? s.modNeg : s.modZero)}>
-                {mod}
-              </span>
+              <span className={cx(s.statMod, pos ? s.modPos : neg ? s.modNeg : s.modZero)}>{mod}</span>
             </div>
           );
         })}
       </div>
-
-      {character.items?.length > 0 && (
-        <div className={s.charItems}>
-          <div className={s.charItemsHeader}>
-            <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
-              <rect x="1" y="4.5" width="10" height="7" rx="1" fill="none" stroke="#b8860b" strokeWidth="1.1" />
-              <path d="M1 6.5h10" stroke="#b8860b" strokeWidth="0.9" />
-              <path d="M4 4.5C4 3 4.8 1.5 6 1.5s2 1.5 2 3" fill="none" stroke="#b8860b" strokeWidth="1.1" strokeLinecap="round" />
-              <line x1="6" y1="4.5" x2="6" y2="11.5" stroke="#b8860b" strokeWidth="0.9" />
-            </svg>
-            <span>{tr.inventory}</span>
-            <span className={s.charItemsCount}>{character.items.length}</span>
-          </div>
-          <ul className={s.charItemsList}>
-            {character.items.slice(0, 5).map((item, i) => (
-              <li key={i} className={s.charItem} title={item.description || undefined}>
-                <span className={s.charItemDot} aria-hidden>·</span>
-                <span className={s.charItemName}>{item.name}</span>
-              </li>
-            ))}
-            {character.items.length > 5 && (
-              <li className={s.charItemMore}>{tr.moreItemsFmt.replace("{n}", String(character.items.length - 5))}</li>
-            )}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
@@ -314,6 +543,9 @@ function RollsPanel({
 }) {
   const { lang } = useLang();
   const tr = t[lang].play;
+  const skillNames  = t[lang].character.skillNames as unknown as Record<string, string>;
+  const statAbbrMap = t[lang].character.statAbbr    as unknown as Record<string, string>;
+  const transStatAbbr = (esp: string) => statAbbrMap[STAT_FROM_ABBR[esp]] ?? esp;
   const [rolling, setRolling] = useState<boolean[]>(() => requests.map(() => false));
 
   const allDone = requests.every((r) => sharedRolls[r.personaje ?? "_"] !== undefined);
@@ -383,9 +615,9 @@ function RollsPanel({
             <div key={i} className={cx(s.rollItem, done && s.rollItemDone, !isMine && !done && s.rollItemOther)}>
               <div className={s.rollItemInfo}>
                 {r.personaje && <span className={s.rollItemChar}>{r.personaje}</span>}
-                <span className={s.rollItemType}>{r.tipo}</span>
+                <span className={s.rollItemType}>{skillNames[r.tipo] ?? r.tipo}</span>
                 <span className={s.rollItemFormula}>
-                  {r.dado}{r.mod && ` + ${r.mod}`}{r.bono_prof && " + Prof"}{r.cd != null && ` · CD ${r.cd}`}
+                  {r.dado}{r.mod && ` + ${transStatAbbr(r.mod)}`}{r.bono_prof && " + Prof"}{r.cd != null && ` · CD ${r.cd}`}
                 </span>
               </div>
 
@@ -393,7 +625,7 @@ function RollsPanel({
                 {done && (
                   <div className={s.rollItemResult}>
                     <span className={s.rollItemDie}>{dr}</span>
-                    {r.mod && <span className={s.rollItemMod}>+{r.mod}({mod >= 0 ? "+" : ""}{mod})</span>}
+                    {r.mod && <span className={s.rollItemMod}>+{transStatAbbr(r.mod)}({mod >= 0 ? "+" : ""}{mod})</span>}
                     {pb > 0 && <span className={s.rollItemMod}>+Prof(+{pb})</span>}
                     <span className={s.rollItemEq}>=</span>
                     <span className={s.rollItemTotal}>{total}</span>
@@ -520,9 +752,9 @@ function ItemGrantNote({ grants }: { grants: ItemGrantItem[] }) {
           <div key={i} className={s.itemGrantEntry}>
             <span className={s.itemGrantChar}>{g.character_name}</span>
             <span className={s.itemGrantVerb}> {tr.itemGrantVerb} </span>
-            <span className={s.itemGrantName}>{g.item}</span>
+            <span className={s.itemGrantName}>{translateItem(lang, g.item)}</span>
             {g.description && (
-              <span className={s.itemGrantDesc}> — {g.description}</span>
+              <span className={s.itemGrantDesc}> — {translateItem(lang, g.description)}</span>
             )}
           </div>
         ))}
@@ -967,6 +1199,7 @@ export default function Play() {
   const [sending, setSending] = useState(false);
   const [dmThinking, setDmThinking] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sheetChar, setSheetChar]     = useState<Character | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [diceOpen, setDiceOpen] = useState(false);
   const [diceStatTrigger, setDiceStatTrigger] = useState<TriggerRoll | null>(null);
@@ -1102,6 +1335,97 @@ export default function Play() {
     });
     isFirstScroll.current = false;
   }, [messages, dmThinking, loading]);
+
+  // ── Apply HP updates to local campaign state ──────────────────
+
+  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, hp: upd.hp } : c;
+        }),
+      };
+    });
+  }, []);
+
+  // ── Apply level-up updates to local campaign state ────────────
+
+  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
+    if (!updates.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const upd = updates.find((u) => u.character_id === c.id);
+          return upd ? { ...c, level: upd.level } : c;
+        }),
+      };
+    });
+    setLevelUpQueue(updates);
+  }, []);
+
+  // ── Apply item grants to local campaign state ─────────────────
+
+  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
+    if (!grants.length) return;
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) => {
+          const newItems = grants
+            .filter((g) => g.character_id === c.id)
+            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
+          return newItems.length > 0
+            ? { ...c, items: [...(c.items ?? []), ...newItems] }
+            : c;
+        }),
+      };
+    });
+    setItemGrantQueue(grants);
+  }, []);
+
+  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
+
+  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
+    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
+    setRateLimitType(limitType);
+
+    if (limitType === "day" || secs === 0) {
+      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
+      setRateLimitSecsLeft(0);
+      setActCooldown(30);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setActCooldown((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else {
+      setRateLimitSecsLeft(secs);
+      setActCooldown(secs);
+      rateLimitIntervalRef.current = setInterval(() => {
+        setRateLimitSecsLeft((c) => {
+          if (c <= 1) {
+            clearInterval(rateLimitIntervalRef.current!);
+            setRateLimitType(null);
+            return 0;
+          }
+          return c - 1;
+        });
+        setActCooldown((c) => Math.max(0, c - 1));
+      }, 1000);
+    }
+  }, []);
 
   // ── Realtime channel ──────────────────────────────────────────
   // • Postgres Changes on campaign_messages → live messages for all clients
@@ -1572,7 +1896,7 @@ export default function Play() {
 
     if (voteTimeoutRef.current) clearTimeout(voteTimeoutRef.current);
     if (voteIntervalRef.current) clearInterval(voteIntervalRef.current);
-    setActiveVote(null);
+    setActiveVote(null);   // eslint-disable-line react-hooks/set-state-in-effect
     setVoteCountdown(0);
 
     if (approved && userIdRef.current === proposer_id) {
@@ -1607,99 +1931,8 @@ export default function Play() {
         label: tr.rollStatFmt.replace("{n}", STAT_ABBR[stat]),
       });
     },
-    [],
+    [tr.rollStatFmt],
   );
-
-  // ── Apply HP updates to local campaign state ──────────────────
-
-  const applyHpUpdates = useCallback((updates: HpUpdateItem[]) => {
-    if (!updates.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const upd = updates.find((u) => u.character_id === c.id);
-          return upd ? { ...c, hp: upd.hp } : c;
-        }),
-      };
-    });
-  }, []);
-
-  // ── Apply level-up updates to local campaign state ────────────
-
-  const applyLevelUpdates = useCallback((updates: LevelUpItem[]) => {
-    if (!updates.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const upd = updates.find((u) => u.character_id === c.id);
-          return upd ? { ...c, level: upd.level } : c;
-        }),
-      };
-    });
-    setLevelUpQueue(updates);
-  }, []);
-
-  // ── Apply item grants to local campaign state ─────────────────
-
-  const applyItemGrants = useCallback((grants: ItemGrantItem[]) => {
-    if (!grants.length) return;
-    setCampaign((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        characters: prev.characters.map((c) => {
-          const newItems = grants
-            .filter((g) => g.character_id === c.id)
-            .map((g): CharacterItem => ({ name: g.item, description: g.description }));
-          return newItems.length > 0
-            ? { ...c, items: [...(c.items ?? []), ...newItems] }
-            : c;
-        }),
-      };
-    });
-    setItemGrantQueue(grants);
-  }, []);
-
-  // ── Rate limit countdown (shared by sender + broadcast receivers) ─
-
-  const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
-    if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
-    setRateLimitType(limitType);
-
-    if (limitType === "day" || secs === 0) {
-      // Daily limit: just show the message, no countdown, block Actuar for 30s as soft lock
-      setRateLimitSecsLeft(0);
-      setActCooldown(30);
-      rateLimitIntervalRef.current = setInterval(() => {
-        setActCooldown((c) => {
-          if (c <= 1) {
-            clearInterval(rateLimitIntervalRef.current!);
-            setRateLimitType(null);
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
-    } else {
-      setRateLimitSecsLeft(secs);
-      setActCooldown(secs);
-      rateLimitIntervalRef.current = setInterval(() => {
-        setRateLimitSecsLeft((c) => {
-          if (c <= 1) {
-            clearInterval(rateLimitIntervalRef.current!);
-            setRateLimitType(null);
-            return 0;
-          }
-          return c - 1;
-        });
-        setActCooldown((c) => Math.max(0, c - 1));
-      }, 1000);
-    }
-  }, []);
 
   // ── Player roll handler (broadcasts to other players) ─────
 
@@ -1953,12 +2186,11 @@ export default function Play() {
                   character={char}
                   color={AVATAR_COLORS[i % AVATAR_COLORS.length]}
                   active={char.id === activeCharId}
-                  onClick={() => {
-                    // Only allow switching to characters owned by the current user
+                  onOpenSheet={() => {
                     if (char.user_id === userId) setActiveCharId(char.id);
+                    setSheetChar(char);
                     setSidebarOpen(false);
                   }}
-                  onStatRoll={char.user_id === userId ? handleStatRoll : undefined}
                 />
               ))
             )}
@@ -1968,6 +2200,19 @@ export default function Play() {
         {sidebarOpen && (
           <div className={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />
         )}
+
+        {/* Character sheet modal */}
+        {sheetChar && (() => {
+          const idx = campaign.characters.findIndex((c) => c.id === sheetChar.id);
+          return (
+            <CharacterSheetModal
+              character={sheetChar}
+              color={AVATAR_COLORS[idx >= 0 ? idx % AVATAR_COLORS.length : 0]}
+              onClose={() => setSheetChar(null)}
+              onStatRoll={sheetChar.user_id === userId ? handleStatRoll : undefined}
+            />
+          );
+        })()}
 
         {/* Chat */}
         <main className={s.chat}>

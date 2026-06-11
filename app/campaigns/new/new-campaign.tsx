@@ -21,6 +21,43 @@ type FormErrors = {
   general?: string;
 };
 
+// ── Flag SVGs ──────────────────────────────────────────────────
+
+function FlagEs() {
+  return (
+    <svg width="22" height="15" viewBox="0 0 22 15" aria-hidden>
+      <rect width="22" height="15" fill="#c60b1e" />
+      <rect y="3.75" width="22" height="7.5" fill="#ffc400" />
+    </svg>
+  );
+}
+
+function FlagEn() {
+  return (
+    <svg width="22" height="15" viewBox="0 0 22 15" aria-hidden>
+      <rect width="22" height="15" fill="#012169" />
+      <line x1="0" y1="0" x2="22" y2="15" stroke="white" strokeWidth="3.5" />
+      <line x1="22" y1="0" x2="0" y2="15" stroke="white" strokeWidth="3.5" />
+      <line x1="0" y1="0" x2="22" y2="15" stroke="#c8102e" strokeWidth="2" />
+      <line x1="22" y1="0" x2="0" y2="15" stroke="#c8102e" strokeWidth="2" />
+      <rect x="9.5" y="0" width="3" height="15" fill="white" />
+      <rect x="0" y="6" width="22" height="3" fill="white" />
+      <rect x="10.5" y="0" width="1" height="15" fill="#c8102e" />
+      <rect x="0" y="7" width="22" height="1" fill="#c8102e" />
+    </svg>
+  );
+}
+
+function FlagPt() {
+  return (
+    <svg width="22" height="15" viewBox="0 0 22 15" aria-hidden>
+      <rect width="22" height="15" fill="#009c3b" />
+      <polygon points="11,1.5 20.5,7.5 11,13.5 1.5,7.5" fill="#ffdf00" />
+      <circle cx="11" cy="7.5" r="3.8" fill="#002776" />
+    </svg>
+  );
+}
+
 // ── Setting icons (static, language-independent) ───────────────
 
 const SETTING_ICONS: Record<string, React.ReactElement> = {
@@ -87,11 +124,13 @@ export default function NewCampaign() {
   const tr = t[lang].newCampaign;
 
   const [authLoading, setAuthLoading] = useState(true);
+  const [tab, setTab] = useState<"new" | "existing">("new");
   const [name, setName] = useState("");
   const [setting, setSetting] = useState<Setting | "">("");
   const [tone, setTone] = useState<Tone | "">("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isPublic, setIsPublic] = useState(false);
+  const [gameLang, setGameLang] = useState<"es" | "en" | "pt">("es");
   const [errors, setErrors] = useState<FormErrors>({});
   const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -139,6 +178,7 @@ export default function NewCampaign() {
           tone,
           system_prompt: systemPrompt.trim() || undefined,
           is_public: isPublic,
+          game_language: gameLang,
         }),
       });
       if (!res.ok) {
@@ -218,7 +258,43 @@ export default function NewCampaign() {
               </p>
             </div>
 
-            <OrnamentDivider margin="0 0 32px" />
+            <OrnamentDivider margin="0 0 24px" />
+
+            {/* Tabs */}
+            <div className={s.tabs}>
+              <button
+                type="button"
+                className={cx(s.tab, tab === "new" && s.tabActive)}
+                onClick={() => setTab("new")}
+              >
+                {tr.tabNew}
+              </button>
+              <button
+                type="button"
+                className={cx(s.tab, tab === "existing" && s.tabActive)}
+                onClick={() => setTab("existing")}
+              >
+                {tr.tabExisting}
+                <span className={s.tabComingSoon}>{tr.comingSoon}</span>
+              </button>
+            </div>
+
+            {/* Coming soon panel */}
+            {tab === "existing" && (
+              <div className={s.comingSoonPanel}>
+                <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#3a2810" strokeWidth="1.5" />
+                  <path d="M20 12 C20 12 28 16 28 22 Q28 28 20 30 Q12 28 12 22 C12 16 20 12 20 12Z" fill="none" stroke="#3a2810" strokeWidth="1.3" />
+                  <line x1="20" y1="20" x2="26" y2="20" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+                  <line x1="20" y1="20" x2="20" y2="14" stroke="#b8860b" strokeWidth="1.4" strokeLinecap="round" />
+                  <circle cx="20" cy="20" r="1.5" fill="#b8860b" />
+                </svg>
+                <div className={s.comingSoonTitle}>{tr.comingSoon}</div>
+                <div className={s.comingSoonText}>{tr.comingSoonDesc}</div>
+              </div>
+            )}
+
+            {tab === "new" && <>
 
             {/* General error */}
             {errors.general && (
@@ -319,6 +395,29 @@ export default function NewCampaign() {
                 />
               </div>
 
+              {/* Game language */}
+              <div className={s.section}>
+                <div className={s.label}>
+                  {tr.gameLangLabel}
+                  <span className={s.labelOptional}>&nbsp;—&nbsp;{tr.gameLangDesc}</span>
+                </div>
+                <div className={s.langRow}>
+                  {(["es", "en", "pt"] as const).map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      className={cx(s.langBtn, gameLang === code && s.langBtnSelected)}
+                      onClick={() => setGameLang(code)}
+                    >
+                      <span className={s.langFlag}>
+                        {code === "es" ? <FlagEs /> : code === "en" ? <FlagEn /> : <FlagPt />}
+                      </span>
+                      <span>{code === "es" ? tr.gameLangEs : code === "en" ? tr.gameLangEn : tr.gameLangPt}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Visibility */}
               <div className={s.section}>
                 <div className={s.label}>{tr.visibilityLabel}</div>
@@ -368,6 +467,8 @@ export default function NewCampaign() {
                 </button>
               </div>
             </form>
+
+            </>}
           </div>
 
           <div className={s.borderBottom} />

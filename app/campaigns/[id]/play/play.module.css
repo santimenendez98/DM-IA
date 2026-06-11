@@ -2051,6 +2051,298 @@
   color: #7a6030;
 }
 
+/* ── Character sheet modal ───────────────────────────────────── */
+
+.sheetOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(3px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sheetModal {
+  position: relative;
+  background: linear-gradient(160deg, #0d0918 0%, #090710 50%, #0a0a0d 100%);
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(184, 134, 11, 0.06);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 134, 11, 0.2) transparent;
+}
+.sheetModal::-webkit-scrollbar { width: 4px; }
+.sheetModal::-webkit-scrollbar-track { background: transparent; }
+.sheetModal::-webkit-scrollbar-thumb { background: rgba(184, 134, 11, 0.2); border-radius: 2px; }
+
+.sheetClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  background: rgba(10, 7, 18, 0.9);
+  border: 1px solid rgba(184, 134, 11, 0.22);
+  border-radius: 4px;
+  color: #6a5535;
+  font-size: 0.72rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  z-index: 2;
+}
+.sheetClose:hover { background: rgba(184, 134, 11, 0.15); color: #c9a030; border-color: rgba(184, 134, 11, 0.45); }
+
+/* Header */
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 50px 14px 18px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.1);
+}
+
+.sheetAvatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12), 0 0 16px rgba(184, 134, 11, 0.12);
+  overflow: hidden;
+}
+.sheetAvatarImg { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+.sheetHeaderInfo { flex: 1; min-width: 0; }
+
+.sheetName {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0d0a8;
+  line-height: 1.2;
+  margin-bottom: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheetBadgeRow { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.sheetBadge {
+  font-family: 'Cinzel', serif;
+  font-size: 0.57rem;
+  color: #7a6040;
+  background: rgba(122, 96, 64, 0.1);
+  border: 1px solid rgba(122, 96, 64, 0.2);
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.03em;
+}
+
+/* HP */
+.sheetHpSection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.08);
+}
+.sheetHpLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.57rem;
+  color: #5a4530;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  flex-shrink: 0;
+}
+.sheetHpBar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.sheetHpFill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.sheetHpNums {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  color: #7a6040;
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* Combat strip */
+.sheetCombat { display: flex; border-bottom: 1px solid rgba(184, 134, 11, 0.08); }
+.sheetCombatCell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 4px;
+  border-right: 1px solid rgba(184, 134, 11, 0.07);
+}
+.sheetCombatCell:last-child { border-right: none; }
+.sheetCombatVal {
+  font-family: 'Cinzel', serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #d4c090;
+  line-height: 1;
+}
+.sheetCombatLbl {
+  font-family: 'Cinzel', serif;
+  font-size: 0.46rem;
+  color: #5a4530;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* Sections */
+.sheetSection {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.07);
+}
+.sheetSection:last-child { border-bottom: none; padding-bottom: 20px; }
+
+.sheetSectionTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #b8860b;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.1);
+}
+
+/* Stats */
+.sheetStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.sheetStatCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(5, 3, 10, 0.5);
+  border: 1px solid rgba(184, 134, 11, 0.1);
+  border-radius: 5px;
+  padding: 8px 2px 6px;
+  gap: 2px;
+  transition: background 0.14s, border-color 0.14s;
+}
+.sheetStatCellRollable { cursor: pointer; }
+.sheetStatCellRollable:hover { background: rgba(184, 134, 11, 0.13); border-color: rgba(184, 134, 11, 0.32); }
+.sheetStatCellRollable:hover .sheetStatAbbr  { color: #b8860b; }
+.sheetStatCellRollable:hover .sheetStatScore { color: #e8c040; }
+
+.sheetStatAbbr {
+  font-family: 'Cinzel', serif;
+  font-size: 0.48rem;
+  color: #5a4530;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.sheetStatScore {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #d4c090;
+  line-height: 1;
+}
+.sheetStatMod { font-size: 0.6rem; font-weight: 600; }
+
+/* Saving throws & Skills */
+.sheetSavesGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3px 10px;
+}
+.sheetSkillsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 16px;
+}
+.sheetSkillRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.sheetSkillDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(184, 134, 11, 0.28);
+  background: transparent;
+  flex-shrink: 0;
+}
+.sheetSkillDotProf {
+  background: #b8860b;
+  border-color: #b8860b;
+  box-shadow: 0 0 5px rgba(184, 134, 11, 0.45);
+}
+.sheetSkillName {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.83rem;
+  color: #9a7850;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sheetSkillMod { font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: 600; flex-shrink: 0; }
+
+/* Inventory */
+.sheetItemsList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sheetItemRow   { display: flex; align-items: baseline; gap: 7px; }
+.sheetItemDot   { color: #7a6030; font-size: 0.9rem; flex-shrink: 0; line-height: 1; }
+.sheetItemName  { font-family: 'Crimson Text', Georgia, serif; font-size: 0.9rem; color: #c8a860; line-height: 1.3; }
+
+/* Spells */
+.sheetSpellGroup { margin-bottom: 10px; }
+.sheetSpellGroup:last-child { margin-bottom: 0; }
+.sheetSpellGroupLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.53rem;
+  font-weight: 700;
+  color: #b8860b;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  opacity: 0.75;
+}
+.sheetSpellRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.05);
+}
+.sheetSpellRow:last-child { border-bottom: none; }
+.sheetSpellName  { font-family: 'Crimson Text', Georgia, serif; font-size: 0.9rem; color: #c8a860; flex: 1; }
+.sheetSpellSchool { font-size: 0.68rem; color: #5a4020; font-style: italic; flex-shrink: 0; }
+
 /* ── Mobile sidebar overlay ───────────────────────────────────── */
 
 .sidebarOverlay {

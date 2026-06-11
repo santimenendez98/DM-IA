@@ -6,6 +6,7 @@ import type { GuildCampaign } from "@/types/join-request";
 import { cx } from "@/components/cx";
 import { useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import s from "./guild-explorer.module.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -65,14 +66,37 @@ export default function GuildExplorer({ open, onClose }: Props) {
     }
   }, [open, load]);
 
-  // Poll every 10 seconds while open to reflect request status changes.
+  // Real-time: react to party slot changes and campaigns starting.
   useEffect(() => {
     if (!open) return;
-    const timer = setInterval(async () => {
-      const res = await fetch("/api/guild");
-      if (res.ok) setCampaigns(await res.json() as GuildCampaign[]);
-    }, 10000);
-    return () => clearInterval(timer);
+
+    const supabase = createSupabaseClient();
+
+    const channel = supabase
+      .channel("guild-realtime")
+      // Someone joined or left a campaign → refresh party counts
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "campaign_characters" },
+        async () => {
+          const res = await fetch("/api/guild", { cache: "no-store" });
+          if (res.ok) setCampaigns(await res.json() as GuildCampaign[]);
+        },
+      )
+      // A campaign was updated (e.g. started_at set) → remove it from list
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "campaigns" },
+        (payload: { new: Record<string, unknown> }) => {
+          const updated = payload.new as { id: string; started_at: string | null };
+          if (updated.started_at) {
+            setCampaigns((prev) => prev.filter((c) => c.id !== updated.id));
+          }
+        },
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [open]);
 
   const openForm = useCallback(
