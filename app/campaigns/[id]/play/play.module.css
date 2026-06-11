@@ -2063,6 +2063,7 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
+  padding-top: 72px;
 }
 
 .sheetModal {
@@ -2342,6 +2343,47 @@
 .sheetSpellRow:last-child { border-bottom: none; }
 .sheetSpellName  { font-family: 'Crimson Text', Georgia, serif; font-size: 0.9rem; color: #c8a860; flex: 1; }
 .sheetSpellSchool { font-size: 0.68rem; color: #5a4020; font-style: italic; flex-shrink: 0; }
+
+/* Spell slots */
+.sheetSlotRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.sheetSlotRow:last-of-type { margin-bottom: 0; }
+.sheetSlotLabel {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.82rem;
+  color: #a88840;
+  min-width: 72px;
+  flex-shrink: 0;
+}
+.sheetSlotPips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.sheetSlotPip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #8a6820;
+  padding: 0;
+  cursor: default;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.slotUsed  { background: #c9a030; border-color: #c9a030; }
+.slotAvail { background: transparent; }
+.sheetSlotCount {
+  font-size: 0.72rem;
+  color: #7a6030;
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
 
 /* ── Mobile sidebar overlay ───────────────────────────────────── */
 

@@ -115,9 +115,11 @@ export async function PATCH(
     stats,
     backstory,
     spells_known,
-  } = body as Partial<UpdateCharacterInput> & { spells_known?: CharacterSpell[] };
+    spell_slots_used,
+    hit_dice_used,
+  } = body as Partial<UpdateCharacterInput> & { spells_known?: CharacterSpell[]; spell_slots_used?: Record<string, number>; hit_dice_used?: number };
 
-  const providedFields = [name, charClass, level, hp, max_hp, stats, backstory, spells_known];
+  const providedFields = [name, charClass, level, hp, max_hp, stats, backstory, spells_known, spell_slots_used, hit_dice_used];
   if (providedFields.every((v) => v === undefined)) {
     return NextResponse.json(
       { error: "Se requiere al menos un campo para actualizar." },
@@ -179,9 +181,11 @@ export async function PATCH(
   if (max_hp !== undefined)       patch.max_hp       = max_hp;
   if (stats !== undefined)        patch.stats        = stats;
   if (backstory !== undefined)    patch.backstory    = backstory?.trim() ?? null;
-  if (spells_known !== undefined) patch.spells_known = Array.isArray(spells_known) ? spells_known : [];
+  if (spells_known !== undefined)      patch.spells_known      = Array.isArray(spells_known) ? spells_known : [];
+  if (spell_slots_used !== undefined)  patch.spell_slots_used  = spell_slots_used;
+  if (hit_dice_used !== undefined)     patch.hit_dice_used     = Math.max(0, Math.round(hit_dice_used));
   // Leveling up consumes the DM's authorization
-  if (level !== undefined)        patch.level_up_authorized = false;
+  if (level !== undefined)             patch.level_up_authorized = false;
 
   const { data, error } = await supabase
     .from("characters")
