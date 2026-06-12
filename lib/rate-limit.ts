@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const HOURLY_LIMIT = parseInt(process.env.DM_RATE_LIMIT_PER_HOUR ?? "20", 10);
+const HOURLY_LIMIT = parseInt(process.env.DM_RATE_LIMIT_PER_HOUR ?? "30", 10);
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -9,7 +9,9 @@ export interface RateLimitResult {
   resetAt: Date;
 }
 
-export async function checkDMRateLimit(userId: string): Promise<RateLimitResult> {
+export async function checkDMRateLimit(
+  userId: string,
+): Promise<RateLimitResult> {
   const admin = createAdminClient();
 
   const bucketDate = new Date();
@@ -42,5 +44,10 @@ export async function checkDMRateLimit(userId: string): Promise<RateLimitResult>
       .insert({ user_id: userId, hour_bucket: bucket, call_count: 1 });
   }
 
-  return { allowed: true, remaining: HOURLY_LIMIT - currentCount - 1, limit: HOURLY_LIMIT, resetAt };
+  return {
+    allowed: true,
+    remaining: HOURLY_LIMIT - currentCount - 1,
+    limit: HOURLY_LIMIT,
+    resetAt,
+  };
 }
