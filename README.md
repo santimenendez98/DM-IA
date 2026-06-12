@@ -66,8 +66,8 @@ NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=tu-cloud-name
 NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=tu-upload-preset
 
 # ── Rate limiting (opcional) ────────────────────────────────────
-# Llamadas al DM permitidas por usuario por hora. Default: 20
-DM_RATE_LIMIT_PER_HOUR=20
+# Llamadas al DM permitidas por usuario por hora. Default: 30
+DM_RATE_LIMIT_PER_HOUR=30
 ```
 
 | Variable                               | Dónde obtenerla                                              |
