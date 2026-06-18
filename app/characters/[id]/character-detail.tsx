@@ -16,6 +16,7 @@ import {
   PREPARED_CASTERS,
   SPELL_GAINS,
   getSpellsForClass,
+  getTotalSpellsAtLevel,
   type Spell,
 } from "@/app/data/spells";
 import { getClassFeatures, getRaceTraits } from "@/lib/dnd-i18n";
@@ -442,7 +443,7 @@ function mergeCampaigns(own: Campaign[], joined: SlimJoinedCampaign[]): Campaign
         character_ids: j.my_characters.map((c) => c.id),
         user_id: "", system_prompt: null,
         is_public: false, game_language: "es", invite_code: null,
-        created_at: "", updated_at: "",
+        level: 1, created_at: "", updated_at: "",
       } as Campaign)),
   ];
 }
@@ -559,8 +560,13 @@ export default function CharacterDetail() {
 
   const availableSpells = useMemo(() => {
     if (!character) return [];
-    const gainLevel = initSpellsOpen ? 1 : character.level + 1;
-    const gain = SPELL_GAINS[character.class]?.[gainLevel] ?? null;
+    if (initSpellsOpen) {
+      const totals = getTotalSpellsAtLevel(character.class, character.level);
+      if (totals.maxSpellLevel === 0) return [];
+      return getSpellsForClass(character.class, totals.maxSpellLevel)
+        .filter((sp) => !knownSpellNames.has(sp.name));
+    }
+    const gain = SPELL_GAINS[character.class]?.[character.level + 1] ?? null;
     if (!gain) return [];
     return getSpellsForClass(character.class, gain.maxLevel)
       .filter((sp) => !knownSpellNames.has(sp.name));
@@ -752,8 +758,11 @@ export default function CharacterDetail() {
 
   // ── Initial spell selection (level 1 known casters) ──────────
 
-  const needsInitSpells = character.level === 1 && KNOWN_CASTERS.has(character.class) && !(character.spells_known ?? []).length;
-  const initSpellGain   = SPELL_GAINS[character.class]?.[1] ?? null;
+  const needsInitSpells = KNOWN_CASTERS.has(character.class) && !(character.spells_known ?? []).length;
+  const initTotals    = getTotalSpellsAtLevel(character.class, character.level);
+  const initSpellGain = (initTotals.spells > 0 || initTotals.cantrips > 0)
+    ? { newSpells: initTotals.spells, newCantrips: initTotals.cantrips, maxLevel: initTotals.maxSpellLevel, canReplace: false }
+    : null;
 
   const initSpellsRemaining   = (initSpellGain?.newSpells   ?? 0) - selectedSpells.length;
   const initCantripsRemaining = (initSpellGain?.newCantrips ?? 0) - selectedCantrips.length;
@@ -1230,7 +1239,7 @@ export default function CharacterDetail() {
                 </svg>
               </div>
               <div className={s.initSpellsPromptInfo}>
-                <div className={s.initSpellsPromptTitle}>{tr.initSpellsPromptTitle}</div>
+                <div className={s.initSpellsPromptTitle}>{tr.initSpellsPromptTitle.replace("{n}", String(character.level))}</div>
                 <div className={s.initSpellsPromptSub}>
                   {tr.initSpellsPromptPre.replace("{cls}", character.class)}{" "}
                   {initSpellGain && (
@@ -1261,7 +1270,7 @@ export default function CharacterDetail() {
           <div id="init-spells-panel" className={s.levelUpPanel}>
             <div className={s.levelUpPanelBorder} />
             <div className={s.levelUpHead}>
-              <div className={s.levelUpSubtitle}>{tr.initSpellsPanelFmt.replace("{cls}", character.class)}</div>
+              <div className={s.levelUpSubtitle}>{tr.initSpellsPanelFmt.replace("{cls}", character.class).replace("{n}", String(character.level))}</div>
               <button className={s.levelUpClose} onClick={closeInitSpells} type="button" aria-label={tr.close}>✕</button>
             </div>
 
@@ -1272,7 +1281,7 @@ export default function CharacterDetail() {
                   <line x1="6" y1="4" x2="6" y2="8" stroke="#e8c040" strokeWidth="1.2" strokeLinecap="round"/>
                   <line x1="4.5" y1="5.5" x2="7.5" y2="5.5" stroke="#e8c040" strokeWidth="1.2" strokeLinecap="round"/>
                 </svg>
-                {tr.initSpellsPickTitle}
+                {tr.initSpellsPickTitle.replace("{n}", String(character.level))}
                 <span className={cx(s.luAsiCounter, initSpellsDone && s.luAsiCounterDone)}>
                   {!initSpellsDone
                     ? [
@@ -1643,6 +1652,34 @@ export default function CharacterDetail() {
                 {tr.cardCampaigns}
               </div>
               {(() => {
+                // Dead character: show where they fell
+                if (character.is_dead) {
+                  const diedCamp = character.died_in_campaign_id
+                    ? campaigns.find((c) => c.id === character.died_in_campaign_id)
+                    : null;
+                  const campName = diedCamp?.name ?? tr.charDeadUnknownCampaign;
+                  return (
+                    <div className={s.emptyState}>
+                      <p style={{ color: "#8a4040", fontStyle: "italic" }}>
+                        {tr.diedInCampaignFmt.replace("{n}", campName)}
+                      </p>
+                    </div>
+                  );
+                }
+
+                // Expelled character: show where they participated
+                if (character.expelled_from_campaign_name) {
+                  const campName = character.expelled_from_campaign_name;
+                  return (
+                    <div className={s.emptyState}>
+                      <p style={{ color: "#8a6030", fontStyle: "italic" }}>
+                        {tr.participatedInFmt.replace("{n}", campName)}
+                      </p>
+                    </div>
+                  );
+                }
+
+                // Active character
                 const active = campaigns.filter((c) => c.character_ids?.includes(character.id));
                 if (!active.length) return (
                   <div className={s.emptyState}><p>{tr.noCampaigns}</p></div>

@@ -529,5 +529,24 @@ export const SPELL_GAINS: Record<string, Record<number, SpellGain>> = {
 };
 
 export function needsSpellSetup(c: Character): boolean {
-  return c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
+  return KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length;
+}
+
+// Cumulative totals for a known-caster reaching a given level from scratch
+export function getTotalSpellsAtLevel(
+  charClass: string,
+  targetLevel: number,
+): { spells: number; cantrips: number; maxSpellLevel: number } {
+  const prog = SPELL_GAINS[charClass];
+  if (!prog) return { spells: 0, cantrips: 0, maxSpellLevel: 0 };
+  let totalSpells = 0, totalCantrips = 0, maxSpellLevel = 0;
+  for (let lvl = 1; lvl <= targetLevel; lvl++) {
+    const g = prog[lvl];
+    if (g) {
+      totalSpells   += g.newSpells;
+      totalCantrips += g.newCantrips;
+      if (g.maxLevel > maxSpellLevel) maxSpellLevel = g.maxLevel;
+    }
+  }
+  return { spells: totalSpells, cantrips: totalCantrips, maxSpellLevel };
 }

@@ -131,6 +131,7 @@ export default function NewCampaign() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [gameLang, setGameLang] = useState<"es" | "en" | "pt">("es");
+  const [campaignLevel, setCampaignLevel] = useState(1);
   const [errors, setErrors] = useState<FormErrors>({});
   const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -179,6 +180,7 @@ export default function NewCampaign() {
           system_prompt: systemPrompt.trim() || undefined,
           is_public: isPublic,
           game_language: gameLang,
+          level: campaignLevel,
         }),
       });
       if (!res.ok) {
@@ -416,6 +418,22 @@ export default function NewCampaign() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Party level */}
+              <div className={s.section}>
+                <label className={s.label} htmlFor="camp-level">{tr.campaignLevelLabel}</label>
+                <p className={s.levelHint}>{tr.campaignLevelHint}</p>
+                <select
+                  id="camp-level"
+                  className={s.levelSelect}
+                  value={campaignLevel}
+                  onChange={(e) => setCampaignLevel(Number(e.target.value))}
+                >
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Visibility */}

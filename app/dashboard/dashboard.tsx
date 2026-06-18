@@ -12,7 +12,7 @@ import type { Character } from "@/types/character";
 import type { JoinRequest } from "@/types/join-request";
 import { useLang } from "@/lib/lang";
 import { t } from "@/lib/translations";
-import { KNOWN_CASTERS } from "@/app/data/spells";
+import { needsSpellSetup } from "@/app/data/spells";
 
 interface JoinedCampaign {
   id: string;
@@ -217,15 +217,16 @@ export default function Dashboard() {
   ];
 
   useEffect(() => {
-    getCurrUser().then(async (u) => {
+    async function loadData() {
+      const u = await getCurrUser();
       if (!u) { router.replace("/auth/login"); return; }
       setUser(u);
       try {
         const [campaignsRes, charactersRes, requestsRes, joinedRes] = await Promise.all([
-          fetch("/api/campaigns"),
-          fetch("/api/characters"),
-          fetch("/api/campaigns/requests"),
-          fetch("/api/campaigns/joined"),
+          fetch("/api/campaigns",          { cache: "no-store" }),
+          fetch("/api/characters",         { cache: "no-store" }),
+          fetch("/api/campaigns/requests", { cache: "no-store" }),
+          fetch("/api/campaigns/joined",   { cache: "no-store" }),
         ]);
         if (campaignsRes.ok)   setCampaigns(await campaignsRes.json());
         if (charactersRes.ok)  setCharacters(await charactersRes.json());
@@ -234,7 +235,17 @@ export default function Dashboard() {
       } catch { /* ignore — data stays empty */ }
       loader.stop();
       setLoading(false);
-    });
+    }
+
+    loadData();
+
+    // Re-fetch when the user navigates back to this tab (handles Next.js router
+    // cache serving the page without remounting after play/campaign screens).
+    function onVisible() {
+      if (document.visibilityState === "visible") loadData();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [router]);
 
   // Real-time: listen for events on the user's personal channel.
@@ -254,6 +265,9 @@ export default function Dashboard() {
       })
       .on("broadcast", { event: "campaign_started" }, ({ payload }: { payload: unknown }) => {
         const { campaign_id, started_at } = payload as { campaign_id: string; started_at: string };
+        setCampaigns((prev) =>
+          prev.map((c) => (c.id === campaign_id ? { ...c, started_at } : c)),
+        );
         setJoinedCampaigns((prev) =>
           prev.map((c) => (c.id === campaign_id ? { ...c, started_at } : c)),
         );
@@ -304,7 +318,17 @@ export default function Dashboard() {
     user?.user_metadata?.username ?? user?.email?.split("@")[0] ?? "Aventurero";
   const initial: string = displayName[0]?.toUpperCase() ?? "A";
 
-  const statValues = [campaigns.length, characters.length];
+  const livingCharacters   = characters.filter((c) => !c.is_dead && !c.expelled_from_campaign_name);
+  const deadCharacters     = characters.filter((c) => c.is_dead);
+  const expelledCharacters = characters.filter((c) => !c.is_dead && !!c.expelled_from_campaign_name);
+
+  // Build a map of campaign id → name from owned + joined campaigns
+  const campaignNameMap = new Map<string, string>([
+    ...campaigns.map((c): [string, string] => [c.id, c.name]),
+    ...joinedCampaigns.map((c): [string, string] => [c.id, c.name]),
+  ]);
+
+  const statValues = [campaigns.length, livingCharacters.length];
 
   return (
     <div className={s.page}>
@@ -485,6 +509,9 @@ export default function Dashboard() {
                         {tr.settings[c.setting as keyof typeof tr.settings] ?? c.setting}
                       </span>
                       <span className={s.badge}>{tr.tones[c.tone as keyof typeof tr.tones] ?? c.tone}</span>
+                      <span className={cx(s.badge, s.badgeLevel)}>
+                        {tr.levelAbbr}{(c as { level?: number }).level ?? 1}
+                      </span>
                       <span className={cx(s.badge, isStarted ? s.badgeActive : s.badgePending)}>
                         {isStarted ? tr.statusInProgress : tr.statusNotStarted}
                       </span>
@@ -578,6 +605,9 @@ export default function Dashboard() {
                             {tr.settings[c.setting as keyof typeof tr.settings] ?? c.setting}
                           </span>
                           <span className={s.badge}>{tr.tones[c.tone as keyof typeof tr.tones] ?? c.tone}</span>
+                          <span className={cx(s.badge, s.badgeLevel)}>
+                            {tr.levelAbbr}{(c as { level?: number }).level ?? 1}
+                          </span>
                           <span className={cx(s.badge, isStarted ? s.badgeActive : s.badgePending)}>
                             {isStarted ? tr.statusInProgress : tr.statusNotStarted}
                           </span>
@@ -645,7 +675,7 @@ export default function Dashboard() {
               <div key={i} className={s.skeleton} style={{ height: 100, borderRadius: 3 }} />
             ))}
           </div>
-        ) : characters.length === 0 ? (
+        ) : livingCharacters.length === 0 ? (
           <div className={s.campaignEmpty}>
             <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>
               <circle cx="16" cy="11" r="5" fill="none" stroke="#4a3510" strokeWidth="1.6" />
@@ -658,7 +688,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className={s.campaignGrid}>
-            {characters.map((c) => {
+            {livingCharacters.map((c) => {
               const hpPct = Math.min(100, Math.round((c.hp / c.max_hp) * 100));
               return (
                 <div key={c.id} className={s.campaignCard}>
@@ -686,7 +716,7 @@ export default function Dashboard() {
                     {c.level_up_authorized && (
                       <div className={s.charNotifLevelUp}>{tr.charNotifLevelUp}</div>
                     )}
-                    {c.level === 1 && KNOWN_CASTERS.has(c.class) && !(c.spells_known ?? []).length && (
+                    {needsSpellSetup(c) && (
                       <div className={s.charNotifSpells}>{tr.charNotifSpells}</div>
                     )}
                   </div>
@@ -700,6 +730,109 @@ export default function Dashboard() {
               );
             })}
           </div>
+        )}
+
+        {/* Dead characters */}
+        {!loading && deadCharacters.length > 0 && (
+          <>
+            <div className={s.sectionTitle} style={{ marginTop: 36 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+                <circle cx="8" cy="6" r="4.5" fill="none" stroke="#7a2020" strokeWidth="1.4"/>
+                <line x1="5" y1="11" x2="5" y2="14" stroke="#7a2020" strokeWidth="1.4" strokeLinecap="round"/>
+                <line x1="8" y1="11.5" x2="8" y2="15" stroke="#7a2020" strokeWidth="1.4" strokeLinecap="round"/>
+                <line x1="11" y1="11" x2="11" y2="14" stroke="#7a2020" strokeWidth="1.4" strokeLinecap="round"/>
+                <circle cx="6.2" cy="5.5" r="1" fill="#7a2020"/>
+                <circle cx="9.8" cy="5.5" r="1" fill="#7a2020"/>
+                <path d="M6.5 8.5 Q8 9.8 9.5 8.5" stroke="#7a2020" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+              </svg>
+              {tr.sectionDeadCharacters}
+            </div>
+            <div className={s.campaignGrid}>
+              {deadCharacters.map((c) => {
+                const campName = c.died_in_campaign_id
+                  ? (campaignNameMap.get(c.died_in_campaign_id) ?? tr.deadUnknownCampaign)
+                  : tr.deadUnknownCampaign;
+                return (
+                  <div key={c.id} className={cx(s.campaignCard, s.deadCharCard)}>
+                    <div className={s.campaignCardTop} style={{ background: "rgba(100,20,20,0.5)" }} />
+                    <div className={cx(s.charAvatar, s.deadCharAvatar)}>
+                      {c.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.image_url} alt={c.name} className={s.charAvatarImg} />
+                      ) : (
+                        c.name[0].toUpperCase()
+                      )}
+                    </div>
+                    <div className={s.campaignInfo}>
+                      <div className={cx(s.campaignName, s.deadCharName)}>{c.name}</div>
+                      <div className={s.campaignMeta}>
+                        <span className={s.badge}>{classNames[c.class] ?? c.class}</span>
+                        <span className={s.badge}>{tr.levelAbbr} {c.level}</span>
+                      </div>
+                      <div className={s.deadCharLabel}>
+                        {tr.deadHeroLabel} · {tr.deadInCampaignFmt.replace("{campaign}", campName)}
+                      </div>
+                    </div>
+                    <button
+                      className={cx(s.btnPlay, s.deadCharBtn)}
+                      onClick={() => router.push(`/characters/${c.id}`)}
+                    >
+                      {tr.btnView}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Expelled characters */}
+        {!loading && expelledCharacters.length > 0 && (
+          <>
+            <div className={s.sectionTitle} style={{ marginTop: 36 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden>
+                <circle cx="8" cy="5.5" r="3.5" fill="none" stroke="#7a5520" strokeWidth="1.4"/>
+                <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="none" stroke="#7a5520" strokeWidth="1.4" strokeLinecap="round"/>
+                <line x1="11" y1="2" x2="14" y2="5" stroke="#7a5520" strokeWidth="1.4" strokeLinecap="round"/>
+                <line x1="14" y1="2" x2="11" y2="5" stroke="#7a5520" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              {tr.sectionDeadCharacters}
+            </div>
+            <div className={s.campaignGrid}>
+              {expelledCharacters.map((c) => {
+                const campName = c.expelled_from_campaign_name ?? tr.expelledUnknownCampaign;
+                return (
+                  <div key={c.id} className={cx(s.campaignCard, s.deadCharCard)}>
+                    <div className={s.campaignCardTop} style={{ background: "rgba(80,50,10,0.5)" }} />
+                    <div className={cx(s.charAvatar, s.deadCharAvatar)} style={{ opacity: 0.6 }}>
+                      {c.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.image_url} alt={c.name} className={s.charAvatarImg} />
+                      ) : (
+                        c.name[0].toUpperCase()
+                      )}
+                    </div>
+                    <div className={s.campaignInfo}>
+                      <div className={cx(s.campaignName, s.deadCharName)}>{c.name}</div>
+                      <div className={s.campaignMeta}>
+                        <span className={s.badge}>{classNames[c.class] ?? c.class}</span>
+                        <span className={s.badge}>{tr.levelAbbr} {c.level}</span>
+                      </div>
+                      <div className={s.deadCharLabel} style={{ color: "#a07040" }}>
+                        {tr.expelledLabel} · {campName}
+                      </div>
+                    </div>
+                    <button
+                      className={cx(s.btnPlay, s.deadCharBtn)}
+                      onClick={() => router.push(`/characters/${c.id}`)}
+                    >
+                      {tr.btnView}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {/* Activity */}

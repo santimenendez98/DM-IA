@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, user_id, name")
+    .select("id, user_id, name, level")
     .eq("invite_code", code.trim().toUpperCase())
     .single();
 
@@ -52,13 +52,39 @@ export async function POST(req: NextRequest) {
 
   const { data: character } = await supabase
     .from("characters")
-    .select("id")
+    .select("id, name, class, level, is_dead")
     .eq("id", character_id)
     .eq("user_id", user.id)
     .single();
 
   if (!character) {
     return NextResponse.json({ error: "Personaje no encontrado o no te pertenece." }, { status: 404 });
+  }
+
+  if ((character as { is_dead?: boolean }).is_dead) {
+    return NextResponse.json({ error: "Este personaje ha fallecido y no puede unirse a una campaña." }, { status: 409 });
+  }
+
+  const { count: charInAny } = await admin
+    .from("campaign_characters")
+    .select("*", { count: "exact", head: true })
+    .eq("character_id", character_id);
+
+  if ((charInAny ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "Este personaje ya pertenece a una campaña. Debes abandonarla antes de unirte a otra." },
+      { status: 409 },
+    );
+  }
+
+  // Level check: character must match campaign level exactly.
+  const campaignLevel = (campaign as { level?: number }).level ?? 1;
+  const charLevel = (character as { level: number }).level;
+  if (charLevel !== campaignLevel) {
+    return NextResponse.json(
+      { error: `Esta campaña es de Nivel ${campaignLevel}. Tu personaje es Nivel ${charLevel}. Crea un personaje de Nivel ${campaignLevel} para poder unirte.` },
+      { status: 409 },
+    );
   }
 
   const { count: partyCount } = await admin
@@ -90,6 +116,11 @@ export async function POST(req: NextRequest) {
 
   broadcastToChannel(`lobby:${campaign.id}`,    "player_joined", { campaign_id: campaign.id });
   broadcastToChannel(`campaign:${campaign.id}`, "party_changed", { campaign_id: campaign.id });
+  broadcastToChannel(`play:${campaign.id}`, "player_joined_narration", {
+    character_name:  (character as { name: string }).name,
+    character_class: (character as { class: string }).class,
+    character_level: (character as { level: number }).level,
+  });
 
   const joinerUsername =
     (user.user_metadata?.username as string | undefined) ??
@@ -108,4 +139,21 @@ export async function POST(req: NextRequest) {
     campaign_id: campaign.id,
     campaign_name: campaign.name,
   });
+}
+
+// ── GET /api/campaigns/join?code=ABC123 ───────────────────────
+// Public preview: returns name + level for a given invite code.
+// Used by the join modal to show level compatibility before submitting.
+
+export async function GET(req: NextRequest) {
+  const code = req.nextUrl.searchParams.get("code")?.trim().toUpperCase();
+  if (!code || code.length !== 6) return NextResponse.json(null);
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("campaigns")
+    .select("name, level")
+    .eq("invite_code", code)
+    .maybeSingle();
+  if (!data) return NextResponse.json(null);
+  return NextResponse.json({ name: data.name, level: (data as { level?: number }).level ?? 1 });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { loader } from "@/lib/loader";
@@ -49,19 +49,18 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [allChars, setAllChars] = useState<Character[]>([]);
-  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [processingReq, setProcessingReq] = useState<string | null>(null);
-  const [dropOpen, setDropOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen]       = useState(false);
+  const [addCharSelected, setAddCharSelected] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
-  const [authPending, setAuthPending] = useState<string | null>(null);
-
-  const dropRef = useRef<HTMLDivElement>(null);
+  const [confirmLastRemove, setConfirmLastRemove] = useState(false);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +69,6 @@ export default function CampaignDetailPage() {
     const authP       = getCurrUser();
     const campP       = fetch(`/api/campaigns/${id}`);
     const charsP      = fetch("/api/characters");
-    const allCampsP   = fetch("/api/campaigns");
     const reqsP       = fetch(`/api/campaigns/${id}/requests`);
 
     async function load() {
@@ -94,11 +92,10 @@ export default function CampaignDetailPage() {
       loader.stop();
 
       // Secondary data is already in-flight; stream it in as it arrives.
-      const [charsRes, allCampsRes, reqsRes] = await Promise.all([charsP, allCampsP, reqsP]);
+      const [charsRes, reqsRes] = await Promise.all([charsP, reqsP]);
       if (cancelled) return;
 
       if (charsRes.ok)   setAllChars(await charsRes.json() as Character[]);
-      if (allCampsRes.ok) setAllCampaigns(await allCampsRes.json() as Campaign[]);
       if (reqsRes.ok)    setJoinRequests(await reqsRes.json() as JoinRequest[]);
     }
 
@@ -133,22 +130,11 @@ export default function CampaignDetailPage() {
     return () => { supabase.removeChannel(channel); };
   }, [id, loading]);
 
-  // Close dropdown on outside click.
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
-        setDropOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
   const addCharacter = useCallback(
     async (charId: string) => {
       if (!campaign || pending) return;
       setPending(charId);
-      setDropOpen(false);
+      setAddModalOpen(false);
       setAddError(null);
 
       try {
@@ -176,33 +162,6 @@ export default function CampaignDetailPage() {
       }
     },
     [campaign, allChars, pending, trc],
-  );
-
-  const removeCharacter = useCallback(
-    async (charId: string) => {
-      if (!campaign || pending) return;
-      setPending(charId);
-
-      const res = await fetch(
-        `/api/campaigns/${campaign.id}/characters/${charId}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      if (res.ok) {
-        setCampaign((prev) =>
-          prev
-            ? {
-                ...prev,
-                characters: prev.characters.filter((c) => c.id !== charId),
-              }
-            : prev,
-        );
-      }
-      setPending(null);
-    },
-    [campaign, pending],
   );
 
   const handleRequestAction = useCallback(
@@ -246,55 +205,27 @@ export default function CampaignDetailPage() {
     }).catch(() => {});
   }
 
-  async function toggleLevelUpAuth(charId: string, authorize: boolean) {
-    if (!campaign || authPending) return;
-    setAuthPending(charId);
-    try {
-      const method = authorize ? "POST" : "DELETE";
-      const res = await fetch(`/api/campaigns/${campaign.id}/authorize-levelup`, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character_ids: [charId] }),
-      });
+  const removeCharacter = useCallback(
+    async (charId: string) => {
+      if (!campaign || pending) return;
+      setPending(charId);
+      const res = await fetch(`/api/campaigns/${campaign.id}/characters/${charId}`, { method: "DELETE" });
       if (res.ok) {
-        setCampaign((prev) =>
-          prev
-            ? {
-                ...prev,
-                characters: prev.characters.map((c) =>
-                  c.id === charId ? { ...c, level_up_authorized: authorize } : c,
-                ),
-              }
-            : prev,
-        );
+        setCampaign((prev) => prev ? { ...prev, characters: prev.characters.filter((c) => c.id !== charId) } : prev);
+        setAllChars((prev) => prev.map((c) => (c.id === charId ? { ...c, campaign_id: null } : c)));
       }
-    } finally {
-      setAuthPending(null);
-    }
-  }
+      setPending(null);
+    },
+    [campaign, pending],
+  );
 
-  async function authorizeAll() {
-    if (!campaign || authPending) return;
-    setAuthPending("all");
-    try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/authorize-levelup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all: true }),
-      });
-      if (res.ok) {
-        setCampaign((prev) =>
-          prev
-            ? {
-                ...prev,
-                characters: prev.characters.map((c) => ({ ...c, level_up_authorized: true })),
-              }
-            : prev,
-        );
-      }
-    } finally {
-      setAuthPending(null);
-    }
+  async function deleteAndLeave() {
+    if (!campaign || deletingCampaign) return;
+    setDeletingCampaign(true);
+    setConfirmLastRemove(false);
+    await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" });
+    loader.start();
+    router.push("/dashboard");
   }
 
   async function handleStart() {
@@ -386,15 +317,12 @@ export default function CampaignDetailPage() {
   const partyIds = new Set(party.map((c) => c.id));
   const isDM = currentUserId === campaign.user_id;
 
-  // Characters locked in another campaign that is already underway.
-  const busyCharIds = new Set(
-    allCampaigns
-      .filter((c) => c.id !== campaign.id && c.started_at !== null)
-      .flatMap((c) => c.character_ids ?? []),
-  );
-
+  // Characters available to add: not already in this party, and not in any campaign.
   const available = allChars.filter(
-    (c) => !partyIds.has(c.id) && !busyCharIds.has(c.id),
+    (c) => !partyIds.has(c.id) && !c.campaign_id,
+  );
+  const hasCharsInOtherCampaigns = allChars.some(
+    (c) => !partyIds.has(c.id) && !!c.campaign_id,
   );
   const emptySlots = MAX_PARTY - party.length;
   const isStarted = campaign.started_at !== null;
@@ -445,6 +373,9 @@ export default function CampaignDetailPage() {
                 </span>
                 <span className={s.badge}>
                   {tones[campaign.tone] ?? campaign.tone}
+                </span>
+                <span className={cx(s.badge, s.badgeLevel)}>
+                  Nv. {campaign.level ?? 1}
                 </span>
                 {isStarted && (
                   <span className={cx(s.badge, s.badgeStarted)}>{trc.isStarted}</span>
@@ -506,21 +437,6 @@ export default function CampaignDetailPage() {
             <span className={s.partyCount}>
               {party.length} / {MAX_PARTY}
             </span>
-            {isDM && party.length > 0 && (
-              <button
-                type="button"
-                className={s.authAllBtn}
-                onClick={authorizeAll}
-                disabled={!!authPending}
-                title={trc.authAllTitle}
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
-                  <line x1="5.5" y1="9" x2="5.5" y2="2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                  <path d="M2.5 4.5L5.5 2L8.5 4.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                {trc.authAllBtn}
-              </button>
-            )}
           </div>
 
           {addError && (
@@ -546,7 +462,6 @@ export default function CampaignDetailPage() {
                 100,
                 Math.round((char.hp / char.max_hp) * 100),
               );
-              const isRemoving = pending === char.id;
               return (
                 <div key={char.id} className={s.slot}>
                   <div className={s.slotTop} />
@@ -581,40 +496,36 @@ export default function CampaignDetailPage() {
                       </span>
                     </div>
                   </div>
-                  {/* Level-up status inside slotInfo bottom area */}
                   {isDM && (
                     <button
+                      className={s.slotRemove}
+                      onClick={() => {
+                        const myCharsInParty = party.filter((c) => c.user_id === currentUserId);
+                        const isLastOwn  = char.user_id === currentUserId && myCharsInParty.length === 1;
+                        const isLastAll  = party.length === 1;
+                        if (isStarted && (isLastOwn || isLastAll)) {
+                          setConfirmLastRemove(true);
+                        } else {
+                          removeCharacter(char.id);
+                        }
+                      }}
+                      disabled={!!pending}
+                      title={trc.expelTitle}
                       type="button"
-                      className={cx(
-                        s.slotAuthBtn,
-                        char.level_up_authorized && s.slotAuthBtnActive,
-                      )}
-                      onClick={() => toggleLevelUpAuth(char.id, !char.level_up_authorized)}
-                      disabled={!!authPending || char.level >= 20}
-                      title={char.level_up_authorized ? trc.revokeAuthTitle : trc.authorizeTitle}
                     >
-                      {authPending === char.id ? "···" : (
-                        <>
-                          <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden>
-                            <line x1="4.5" y1="8" x2="4.5" y2="1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                            <path d="M2 4L4.5 1.5L7 4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          {char.level_up_authorized ? trc.authorizedLabel : trc.authorizeBtn}
-                        </>
-                      )}
+                      {pending === char.id ? "·" : "✕"}
                     </button>
                   )}
-                  {!isDM && char.level_up_authorized && (
-                    <span className={s.levelUpBadge}>{trc.levelUpBadge}</span>
-                  )}
                   <button
-                    className={s.slotRemove}
-                    onClick={() => removeCharacter(char.id)}
-                    disabled={!!pending}
-                    title={trc.expelTitle}
+                    className={s.slotView}
+                    onClick={() => { loader.start(); router.push(`/characters/${char.id}`); }}
+                    title={trc.viewSheetTitle ?? "Ver planilla"}
                     type="button"
                   >
-                    {isRemoving ? "·" : "✕"}
+                    <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
+                      <ellipse cx="5.5" cy="5.5" rx="4.5" ry="3" fill="none" stroke="currentColor" strokeWidth="1.2"/>
+                      <circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/>
+                    </svg>
                   </button>
                 </div>
               );
@@ -631,95 +542,26 @@ export default function CampaignDetailPage() {
                       <span className={s.slotLoadingLabel}>{trc.addingLabel}</span>
                     </div>
                   ) : i === 0 ? (
-                  <div
-                    className={s.addWrap}
-                    ref={dropRef}
+                  <button
+                    className={s.slotAddBtn}
+                    onClick={() => {
+                      const first = available.find((c) => {
+                        const dead = !!(c as { is_dead?: boolean }).is_dead;
+                        const lvl  = c.level !== (campaign.level ?? 1);
+                        return !dead && !lvl && !needsSpellSetup(c);
+                      });
+                      setAddCharSelected(first?.id ?? "");
+                      setAddModalOpen(true);
+                    }}
+                    disabled={!!pending}
+                    type="button"
                   >
-                    <button
-                      className={s.slotAddBtn}
-                      onClick={() => setDropOpen((v) => !v)}
-                      disabled={!!pending}
-                      type="button"
-                    >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
-                        aria-hidden
-                      >
-                        <line
-                          x1="10"
-                          y1="4"
-                          x2="10"
-                          y2="16"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                        />
-                        <line
-                          x1="4"
-                          y1="10"
-                          x2="16"
-                          y2="10"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span>{trc.addBtn}</span>
-                    </button>
-
-                    {dropOpen && (
-                      <div className={s.dropdown}>
-                        {available.length === 0 ? (
-                          <div className={s.dropEmpty}>
-                            {allChars.length === 0
-                              ? trc.dropNoChars
-                              : busyCharIds.size > 0
-                                ? trc.dropAllBusy
-                                : trc.dropAllIn}
-                          </div>
-                        ) : (
-                          available.map((c) => {
-                            const blocked = needsSpellSetup(c);
-                            return (
-                              <button
-                                key={c.id}
-                                className={cx(s.dropOption, blocked && s.dropOptionBlocked)}
-                                onClick={() => !blocked && addCharacter(c.id)}
-                                disabled={!!pending || blocked}
-                                type="button"
-                                title={blocked ? trc.charSpellsTooltip : undefined}
-                              >
-                                <div className={s.dropAvatar}>
-                                  {c.image_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={c.image_url} alt={c.name} className={s.dropAvatarImg} />
-                                  ) : c.name[0].toUpperCase()}
-                                </div>
-                                <div className={s.dropInfo}>
-                                  <div className={s.dropName}>{c.name}</div>
-                                  <div className={s.dropMeta}>
-                                    {classNames[c.class] ?? c.class} · {trc.levelAbbr}{c.level}
-                                    {blocked && <span className={s.dropWarn}> {trc.charSpellsWarn}</span>}
-                                  </div>
-                                </div>
-                                {blocked ? (
-                                  <svg width="13" height="13" viewBox="0 0 13 13" className={s.dropBlockIcon} aria-hidden>
-                                    <path d="M6.5 1.5 C6.5 1.5 11 4 11 7 Q11 10.5 6.5 11.5 Q2 10.5 2 7 C2 4 6.5 1.5 6.5 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.3"/>
-                                    <line x1="6.5" y1="4.5" x2="6.5" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                                    <circle cx="6.5" cy="9.5" r="0.7" fill="currentColor"/>
-                                  </svg>
-                                ) : pending === c.id ? (
-                                  <div className={s.dropSpinner}>···</div>
-                                ) : null}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+                      <line x1="10" y1="4" x2="10" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="4" y1="10" x2="16" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                    <span>{trc.addBtn}</span>
+                  </button>
                   ) : (
                     <div className={s.slotPlaceholder}>
                       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
@@ -874,6 +716,179 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </div>
+
+      {/* ── Add character modal ───────────────────────────────── */}
+      {addModalOpen && (
+        <div
+          className={s.addModalOverlay}
+          onMouseDown={(e) => e.target === e.currentTarget && setAddModalOpen(false)}
+        >
+          <div className={s.addModal}>
+            {/* Header */}
+            <div className={s.addModalHeader}>
+              <div className={s.addModalHeaderLeft}>
+                <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden>
+                  <circle cx="7.5" cy="5" r="3" fill="none" stroke="#b8860b" strokeWidth="1.3" />
+                  <path d="M1 14c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" fill="none" stroke="#b8860b" strokeWidth="1.3" strokeLinecap="round" />
+                  <line x1="12" y1="1" x2="12" y2="5" stroke="#b8860b" strokeWidth="1.3" strokeLinecap="round" />
+                  <line x1="10" y1="3" x2="14" y2="3" stroke="#b8860b" strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+                <span className={s.addModalTitle}>{trc.addBtn}</span>
+              </div>
+              <button
+                className={s.addModalClose}
+                onClick={() => setAddModalOpen(false)}
+                type="button"
+                aria-label="Cerrar"
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
+                  <line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Character list */}
+            <div className={s.addModalBody}>
+              {available.length === 0 ? (
+                <p className={s.addModalEmpty}>
+                  {allChars.length === 0
+                    ? trc.dropNoChars
+                    : hasCharsInOtherCampaigns
+                      ? trc.dropAllBusy
+                      : trc.dropAllIn}
+                </p>
+              ) : (
+                <div className={s.addModalList}>
+                  {available.map((c) => {
+                    const isDead        = !!(c as { is_dead?: boolean }).is_dead;
+                    const levelMismatch = c.level !== (campaign.level ?? 1);
+                    const spellsBlocked = needsSpellSetup(c);
+                    const blocked   = isDead || levelMismatch || spellsBlocked;
+                    const selected  = addCharSelected === c.id;
+                    const campLevel = campaign.level ?? 1;
+                    const tooltip   = isDead
+                      ? trc.charDeadTooltip
+                      : levelMismatch
+                        ? trc.charLevelTooltip.replace("{n}", String(campLevel))
+                        : spellsBlocked
+                          ? trc.charSpellsTooltip
+                          : undefined;
+
+                    const inner = (
+                      <>
+                        <div className={s.addModalAvatar}>
+                          {c.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={c.image_url} alt={c.name} className={s.addModalAvatarImg} />
+                          ) : c.name[0].toUpperCase()}
+                        </div>
+                        <div className={s.addModalCharInfo}>
+                          <div className={s.addModalCharName}>{c.name}</div>
+                          <div className={s.addModalCharMeta}>
+                            {classNames[c.class] ?? c.class} · {trc.levelAbbr}{c.level}
+                            {isDead && <span className={s.addModalWarn}> {trc.charDeadWarn}</span>}
+                            {!isDead && levelMismatch && <span className={s.addModalWarn}> {trc.charLevelWarn}</span>}
+                            {!isDead && !levelMismatch && spellsBlocked && <span className={s.addModalWarn}> {trc.charSpellsWarn}</span>}
+                          </div>
+                        </div>
+                        {blocked ? (
+                          <svg width="13" height="13" viewBox="0 0 13 13" className={s.addModalBlockIcon} aria-hidden>
+                            <path d="M6.5 1.5 C6.5 1.5 11 4 11 7 Q11 10.5 6.5 11.5 Q2 10.5 2 7 C2 4 6.5 1.5 6.5 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.3"/>
+                            <line x1="6.5" y1="4.5" x2="6.5" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                            <circle cx="6.5" cy="9.5" r="0.7" fill="currentColor"/>
+                          </svg>
+                        ) : selected ? (
+                          <svg width="12" height="12" viewBox="0 0 12 12" className={s.addModalCheckIcon} aria-hidden>
+                            <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        ) : null}
+                      </>
+                    );
+
+                    return blocked ? (
+                      <div
+                        key={c.id}
+                        className={cx(s.addModalOption, s.addModalOptionBlocked)}
+                        title={tooltip}
+                        aria-disabled="true"
+                      >
+                        {inner}
+                      </div>
+                    ) : (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={cx(s.addModalOption, selected && s.addModalOptionSelected)}
+                        onClick={() => setAddCharSelected(c.id)}
+                      >
+                        {inner}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={s.addModalFooter}>
+              <button
+                type="button"
+                className={s.addModalCancel}
+                onClick={() => setAddModalOpen(false)}
+              >
+                {trc.cancel ?? "Cancelar"}
+              </button>
+              <button
+                type="button"
+                className={s.addModalConfirm}
+                disabled={!addCharSelected || !!pending}
+                onClick={() => addCharacter(addCharSelected)}
+              >
+                {trc.addBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm delete on last character removal ──────────── */}
+      {confirmLastRemove && (
+        <div
+          className={s.dangerOverlay}
+          onMouseDown={(e) => e.target === e.currentTarget && setConfirmLastRemove(false)}
+        >
+          <div className={s.dangerModal}>
+            <div className={s.dangerIcon}>
+              <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+                <path d="M14 3L26 24H2L14 3Z" fill="none" stroke="#c04040" strokeWidth="1.6" strokeLinejoin="round" />
+                <line x1="14" y1="11" x2="14" y2="17" stroke="#c04040" strokeWidth="1.6" strokeLinecap="round" />
+                <circle cx="14" cy="20.5" r="1" fill="#c04040" />
+              </svg>
+            </div>
+            <h3 className={s.dangerTitle}>{trc.lastCharTitle ?? "¿Borrar campaña?"}</h3>
+            <p className={s.dangerMsg}>{trc.lastCharMsg ?? "Este es el único aventurero del grupo. Al retirarlo, la campaña se borrará permanentemente."}</p>
+            <div className={s.dangerActions}>
+              <button
+                type="button"
+                className={s.dangerCancel}
+                onClick={() => setConfirmLastRemove(false)}
+                disabled={deletingCampaign}
+              >
+                {trc.cancel ?? "Cancelar"}
+              </button>
+              <button
+                type="button"
+                className={s.dangerConfirm}
+                onClick={deleteAndLeave}
+                disabled={deletingCampaign}
+              >
+                {deletingCampaign ? "···" : (trc.lastCharConfirm ?? "Sí, borrar campaña")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

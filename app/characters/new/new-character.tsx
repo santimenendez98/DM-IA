@@ -578,6 +578,7 @@ export default function NewCharacter() {
 
   // Step 1 — Class
   const [classId,         setClassId]         = useState("");
+  const [level,           setLevel]           = useState(1);
   const [fightingStyleIdx, setFightingStyleIdx] = useState<number | null>(null);
 
   // Step 2 — Stats (which STANDARD_ARRAY value is assigned to each stat)
@@ -650,9 +651,12 @@ export default function NewCharacter() {
 
   const allAssigned = useMemo(() => STAT_KEYS.every((k) => assignments[k] !== undefined), [assignments]);
 
-  const maxHp = classData
-    ? classData.hitDie + mod(finalStats.constitution)
-    : 8;
+  const maxHp = useMemo(() => {
+    if (!classData) return 8;
+    const conMod = mod(finalStats.constitution);
+    const avgGain = Math.floor(classData.hitDie / 2) + 1;
+    return (classData.hitDie + conMod) + Math.max(0, level - 1) * (avgGain + conMod);
+  }, [classData, finalStats.constitution, level]);
 
   const allSkills = useMemo(() => [...(bgData?.skills ?? []), ...chosenSkills], [bgData, chosenSkills]);
 
@@ -807,7 +811,7 @@ export default function NewCharacter() {
         body: JSON.stringify({
           name: name.trim(),
           class: className,
-          level: 1,
+          level: level,
           hp: Math.max(1, maxHp),
           max_hp: Math.max(1, maxHp),
           stats: finalStats,
@@ -989,7 +993,7 @@ export default function NewCharacter() {
                           key={cls.id}
                           type="button"
                           className={cx(s.classCard, classId === cls.id && s.classCardSelected)}
-                          onClick={() => { setClassId(cls.id); setChosenSkills([]); setEquipChoices({}); setErrors((p) => ({ ...p, class: undefined as unknown as string })); }}
+                          onClick={() => { setClassId(cls.id); setLevel(1); setChosenSkills([]); setEquipChoices({}); setErrors((p) => ({ ...p, class: undefined as unknown as string })); }}
                         >
                           <div className={s.classCardIcon}>{cls.icon}</div>
                           <div className={s.classCardName}>{ci?.name ?? cls.name}</div>
@@ -1000,6 +1004,23 @@ export default function NewCharacter() {
                     })}
                   </div>
                   {errors.class && <FieldError message={errors.class} className={s.fieldError} iconColor="#d07070"/>}
+
+                  {classId && (
+                    <div className={s.fieldGroup}>
+                      <label className={s.sectionTitle} htmlFor="char-level">{tr.levelTitle}</label>
+                      <p className={s.fieldHint}>{tr.levelHint}</p>
+                      <select
+                        id="char-level"
+                        className={s.levelSelect}
+                        value={level}
+                        onChange={(e) => setLevel(Number(e.target.value))}
+                      >
+                        {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+                          <option key={lvl} value={lvl}>{lvl}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {classData && (
                     <div className={s.classDetail}>
@@ -1185,9 +1206,17 @@ export default function NewCharacter() {
 
                   {allAssigned && (
                     <div className={s.statSummary}>
-                      <div className={s.statSummaryTitle}>{tr.statSummary}</div>
+                      <div className={s.statSummaryTitle}>{tr.statSummary.replace("{n}", String(level))}</div>
                       <div className={s.statSummaryHp}>
-                        {classData?.hitDie ?? "?"} <span className={s.statSummaryPlus}>+</span> {mod(finalStats.constitution)} <span className={s.statSummaryEq}>=</span>
+                        {level === 1 ? (
+                          <>
+                            {classData?.hitDie ?? "?"} <span className={s.statSummaryPlus}>+</span> {mod(finalStats.constitution)} <span className={s.statSummaryEq}>=</span>
+                          </>
+                        ) : (
+                          <>
+                            d{classData?.hitDie} · {tr.levelTitle} {level} <span className={s.statSummaryEq}>=</span>
+                          </>
+                        )}
                         <span className={s.statSummaryVal}>{Math.max(1, maxHp)}</span> {tr.statHp}
                       </div>
                     </div>
@@ -1349,6 +1378,11 @@ export default function NewCharacter() {
                       <div className={s.summaryItem}>
                         <div className={s.summaryLabel}>{tr.summaryHp}</div>
                         <div className={s.summaryVal}>{Math.max(1, maxHp)}</div>
+                      </div>
+                      <div className={s.summarySep}/>
+                      <div className={s.summaryItem}>
+                        <div className={s.summaryLabel}>{tr.levelTitle}</div>
+                        <div className={s.summaryVal}>{level}</div>
                       </div>
                     </div>
                     <div className={s.traitBox}>

@@ -31,6 +31,9 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
   const [step, setStep]             = useState<Step>("form");
   const [campaignName, setCampaignName] = useState("");
   const [campaignId, setCampaignId]    = useState("");
+  const [campaignPreview, setCampaignPreview] = useState<{ name: string; level: number } | null>(null);
+  const [previewLoading, setPreviewLoading]   = useState(false);
+  const [previewError, setPreviewError]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -40,17 +43,46 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
     setCharId("");
     setStep("form");
     setError(null);
+    setCampaignPreview(null);
+    setPreviewLoading(false);
+    setPreviewError(false);
     fetch("/api/characters")
       .then((r) => r.ok ? r.json() : [])
       .then((data: Character[]) => {
         setCharacters(data);
-        setCharId(data.find((c) => !needsSpellSetup(c))?.id ?? data[0]?.id ?? "");
+        setCharId(data.find((c) => !needsSpellSetup(c) && !c.campaign_id && !c.is_dead)?.id ?? data[0]?.id ?? "");
       })
       .catch(() => {});
   }, [open]);
 
+  // Auto-fetch campaign preview when code reaches 6 chars.
+  useEffect(() => {
+    if (code.length !== 6) {
+      setCampaignPreview(null);
+      setPreviewLoading(false);
+      setPreviewError(false);
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError(false);
+    setCampaignPreview(null);
+    fetch(`/api/campaigns/join?code=${code}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { name: string; level: number } | null) => {
+        setCampaignPreview(data);
+        setPreviewError(!data);
+        setPreviewLoading(false);
+      })
+      .catch(() => {
+        setCampaignPreview(null);
+        setPreviewError(true);
+        setPreviewLoading(false);
+      });
+  }, [code]);
+
   const selectedChar = characters.find((c) => c.id === charId);
-  const canJoin = !submitting && characters.length > 0 && code.length >= 6 && !!selectedChar && !needsSpellSetup(selectedChar);
+  const selectedLevelBlocked = !!campaignPreview && !!selectedChar && selectedChar.level !== campaignPreview.level;
+  const canJoin = !submitting && !previewLoading && characters.length > 0 && code.length >= 6 && !!campaignPreview && !!selectedChar && !needsSpellSetup(selectedChar) && !selectedChar.campaign_id && !selectedChar.is_dead && !selectedLevelBlocked;
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +91,14 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
     const sel = characters.find((c) => c.id === charId);
     if (sel && needsSpellSetup(sel)) {
       setError(tr.errSpells);
+      return;
+    }
+    if (sel?.campaign_id) {
+      setError(tr.errCampaign);
+      return;
+    }
+    if ((sel as { is_dead?: boolean } | undefined)?.is_dead) {
+      setError(tr.errDead);
       return;
     }
 
@@ -131,6 +171,24 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                 />
               </div>
 
+              {/* Campaign preview */}
+              {code.length === 6 && (
+                <div className={s.campaignPreview}>
+                  {previewLoading && (
+                    <span className={s.previewLoading}>{tr.previewLoading ?? "Buscando campaña…"}</span>
+                  )}
+                  {!previewLoading && previewError && (
+                    <span className={s.previewNotFound}>{tr.previewNotFound ?? "Código inválido"}</span>
+                  )}
+                  {!previewLoading && campaignPreview && (
+                    <>
+                      <span className={s.previewName}>{campaignPreview.name}</span>
+                      <span className={s.previewLevel}>{levelAbbr}{campaignPreview.level}</span>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Character list */}
               <div className={s.field}>
                 <label className={s.label}>{tr.charLabel}</label>
@@ -139,21 +197,23 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                 ) : (
                   <div className={s.charList}>
                     {characters.map((c) => {
-                      const blocked = needsSpellSetup(c);
-                      const selected = charId === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={cx(
-                            s.charOption,
-                            selected && s.charOptionSelected,
-                            blocked && s.charOptionBlocked,
-                          )}
-                          onClick={() => !blocked && setCharId(c.id)}
-                          disabled={blocked}
-                          title={blocked ? tr.spellsTooltip : undefined}
-                        >
+                      const inCampaign  = !!c.campaign_id;
+                      const isDead      = !!(c as { is_dead?: boolean }).is_dead;
+                      const levelMismatch = !!campaignPreview && c.level !== campaignPreview.level;
+                      const blocked     = previewLoading || needsSpellSetup(c) || inCampaign || isDead || levelMismatch;
+                      const selected    = charId === c.id;
+                      const levelN      = campaignPreview?.level ?? 0;
+                      const tooltip     = isDead
+                        ? tr.deadTooltip
+                        : levelMismatch
+                          ? tr.levelTooltip.replace("{n}", String(levelN))
+                          : inCampaign
+                            ? tr.campaignTooltip
+                            : blocked
+                              ? tr.spellsTooltip
+                              : undefined;
+                      const inner = (
+                        <>
                           <div className={s.charAvatar}>
                             {c.image_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -164,7 +224,10 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                             <div className={s.charName}>{c.name}</div>
                             <div className={s.charMeta}>
                               {classNames[c.class] ?? c.class} · {levelAbbr}{c.level}
-                              {blocked && <span className={s.charWarn}> {tr.spellsWarn}</span>}
+                              {isDead        && <span className={s.charWarn}> {tr.deadWarn}</span>}
+                              {!isDead && levelMismatch && <span className={s.charWarn}> {tr.levelWarn}</span>}
+                              {!isDead && !levelMismatch && inCampaign  && <span className={s.charWarn}> {tr.campaignWarn}</span>}
+                              {!isDead && !levelMismatch && !inCampaign && blocked && <span className={s.charWarn}> {tr.spellsWarn}</span>}
                             </div>
                           </div>
                           {blocked ? (
@@ -178,6 +241,27 @@ export default function JoinByCode({ open, onClose, onJoined }: Props) {
                               <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           ) : null}
+                        </>
+                      );
+
+                      return blocked ? (
+                        <div
+                          key={c.id}
+                          className={cx(s.charOption, s.charOptionBlocked)}
+                          title={tooltip}
+                          aria-disabled="true"
+                        >
+                          {inner}
+                        </div>
+                      ) : (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={cx(s.charOption, selected && s.charOptionSelected)}
+                          onClick={() => setCharId(c.id)}
+                          title={tooltip}
+                        >
+                          {inner}
                         </button>
                       );
                     })}
