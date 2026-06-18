@@ -227,10 +227,11 @@ export default function Lobby() {
     setStartError(null);
 
     if (!campaign.started_at) {
+      const now = new Date().toISOString();
       const res = await fetch(`/api/campaigns/${campaign.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ started_at: new Date().toISOString() }),
+        body: JSON.stringify({ started_at: now }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
@@ -238,6 +239,7 @@ export default function Lobby() {
         setStarting(false);
         return;
       }
+      setCampaign((prev) => prev ? { ...prev, started_at: now } : prev);
     }
 
     // Notify all players via WebSocket before navigating

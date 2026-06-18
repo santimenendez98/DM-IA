@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { CreateCampaignInput } from "@/types/campaing";
 import { SETTINGS, TONES } from "@/types/union_types";
 
@@ -27,11 +28,39 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const campaigns = (data ?? []).map((c: Record<string, unknown>) => {
-    const rows = (c.campaign_characters as Array<{ character_id: string }>) ?? [];
+  const rows = data ?? [];
+
+  // Derive started_at from campaign_messages for any campaign that doesn't
+  // have it set yet. Admin client bypasses RLS so the update always succeeds.
+  const unstartedIds = rows
+    .filter((c) => !(c as Record<string, unknown>).started_at)
+    .map((c) => (c as Record<string, unknown>).id as string);
+
+  const startedSet = new Set<string>();
+  if (unstartedIds.length > 0) {
+    const admin = createAdminClient();
+    const { data: msgRows } = await admin
+      .from("campaign_messages")
+      .select("campaign_id")
+      .in("campaign_id", unstartedIds);
+
+    for (const m of msgRows ?? []) startedSet.add(m.campaign_id as string);
+
+    if (startedSet.size > 0) {
+      const now = new Date().toISOString();
+      await admin.from("campaigns").update({ started_at: now }).in("id", [...startedSet]);
+      for (const c of rows) {
+        const cr = c as Record<string, unknown>;
+        if (startedSet.has(cr.id as string)) cr.started_at = now;
+      }
+    }
+  }
+
+  const campaigns = rows.map((c: Record<string, unknown>) => {
+    const charRows = (c.campaign_characters as Array<{ character_id: string }>) ?? [];
     return {
       ...c,
-      character_ids: rows.map((r) => r.character_id),
+      character_ids: charRows.map((r) => r.character_id),
       campaign_characters: undefined,
     };
   });
@@ -64,7 +93,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, setting, tone, system_prompt, is_public, game_language } =
+  const { name, setting, tone, system_prompt, is_public, game_language, level } =
     body as Partial<CreateCampaignInput>;
 
   const fieldErrors: Record<string, string> = {};
@@ -89,6 +118,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const campaignLevel =
+    typeof level === "number" && Number.isInteger(level) && level >= 1 && level <= 20
+      ? level
+      : 1;
+
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
@@ -99,6 +133,7 @@ export async function POST(req: Request) {
       system_prompt: system_prompt?.trim() ?? null,
       is_public: is_public ?? false,
       game_language: ["es", "en", "pt"].includes(game_language ?? "") ? game_language : "es",
+      level: campaignLevel,
     })
     .select()
     .single();

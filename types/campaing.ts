@@ -18,6 +18,7 @@ export interface Campaign {
   game_language: string;
   invite_code: string | null;
   started_at: string | null;
+  level: number;
   character_ids: string[];  // populated from campaign_characters join
   created_at: string;
   updated_at: string;
@@ -30,6 +31,7 @@ export type CreateCampaignInput = {
   system_prompt?: string;
   is_public?: boolean;
   game_language?: string;
+  level?: number;
 };
 
 export type UpdateCampaignInput = Partial<CreateCampaignInput> & {

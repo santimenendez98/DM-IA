@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { CreateCharacterInput, CharacterStats } from "@/types/character";
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -59,7 +60,23 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  const charIds = (data ?? []).map((c) => c.id as string);
+  const admin = createAdminClient();
+  const { data: ccRows } = await admin
+    .from("campaign_characters")
+    .select("character_id, campaign_id")
+    .in("character_id", charIds);
+
+  const campaignMap = new Map(
+    (ccRows ?? []).map((r) => [r.character_id as string, r.campaign_id as string]),
+  );
+
+  const enriched = (data ?? []).map((c) => ({
+    ...c,
+    campaign_id: campaignMap.get(c.id as string) ?? null,
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 // ── POST /api/characters ───────────────────────────────────────

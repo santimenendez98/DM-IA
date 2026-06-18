@@ -16,6 +16,11 @@ import type { Message } from "@/types/message";
 import { cx } from "@/components/cx";
 import s from "./play.module.css";
 import { statMod, calculateAC, profBonus as calcProfBonus } from "@/lib/dnd-utils";
+import { useVoiceInput } from "@/lib/use-voice-input";
+
+// ── Constants ─────────────────────────────────────────────────
+
+const SPEECH_LANG: Record<string, string> = { es: "es-ES", en: "en-US", pt: "pt-BR" };
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -55,6 +60,11 @@ interface SlotUpdateItem {
   spell_slots_used: Record<string, number>;
 }
 
+interface CharacterDeathItem {
+  character_id: string;
+  name: string;
+}
+
 // ── Constants ──────────────────────────────────────────────────
 
 const STAT_KEYS: (keyof CharacterStats)[] = [
@@ -67,14 +77,6 @@ const STAT_ABBR: Record<keyof CharacterStats, string> = {
   intelligence: "INT", wisdom: "SAB", charisma: "CAR",
 };
 
-const STAT_DIE: Record<keyof CharacterStats, DieType> = {
-  strength: 20,
-  dexterity: 12,
-  constitution: 10,
-  intelligence: 8,
-  wisdom: 8,
-  charisma: 6,
-};
 
 const AVATAR_COLORS = ["#7b4ab8", "#4a8fd0", "#b84a4a", "#4ab880"] as const;
 
@@ -95,6 +97,47 @@ const STAT_FROM_ABBR: Record<string, keyof CharacterStats> = {
   FUE: "strength", DES: "dexterity", CON: "constitution",
   INT: "intelligence", SAB: "wisdom", CAR: "charisma",
 };
+
+// ── Combat turn types & parser ─────────────────────────────────
+
+interface CombatTurn {
+  actor: string;
+  tipo: "jugador" | "npc" | "jefe";
+  iniciativa?: number;
+  content: string;
+}
+
+function parseCombatTurns(content: string): { preamble: string; turns: CombatTurn[] } | null {
+  if (!content.includes("TURNO:")) return null;
+  const turnPattern = /TURNO:\s*\{[^}]+\}/g;
+  const positions: Array<{ fullMatch: string; start: number; end: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = turnPattern.exec(content)) !== null) {
+    positions.push({ fullMatch: m[0], start: m.index, end: m.index + m[0].length });
+  }
+  if (positions.length === 0) return null;
+  const preamble = content.slice(0, positions[0].start).trim();
+  const turns: CombatTurn[] = [];
+  for (let i = 0; i < positions.length; i++) {
+    const sectionStart = positions[i].end;
+    const sectionEnd = i + 1 < positions.length ? positions[i + 1].start : content.length;
+    const sectionText = content.slice(sectionStart, sectionEnd).trim();
+    const jsonStr = positions[i].fullMatch.replace(/^TURNO:\s*/, "");
+    try {
+      const data = JSON.parse(jsonStr) as { actor?: string; tipo?: string; iniciativa?: number };
+      const rawTipo = data.tipo ?? "npc";
+      turns.push({
+        actor: String(data.actor ?? "?"),
+        tipo: rawTipo === "jugador" ? "jugador" : rawTipo === "jefe" ? "jefe" : "npc",
+        iniciativa: typeof data.iniciativa === "number" ? data.iniciativa : undefined,
+        content: sectionText,
+      });
+    } catch {
+      turns.push({ actor: "?", tipo: "npc", content: sectionText });
+    }
+  }
+  return { preamble, turns };
+}
 
 function parseRollRequests(content: string): { text: string; rolls: RollRequest[] } {
   const rolls: RollRequest[] = [];
@@ -181,13 +224,11 @@ function CharacterSheetModal({
   character,
   color,
   onClose,
-  onStatRoll,
   isOwner,
 }: {
   character: Character;
   color: string;
   onClose: () => void;
-  onStatRoll?: (stat: keyof CharacterStats, score: number) => void;
   isOwner?: boolean;
 }) {
   const { lang } = useLang();
@@ -274,10 +315,7 @@ function CharacterSheetModal({
               return (
                 <div
                   key={k}
-                  className={cx(s.sheetStatCell, onStatRoll && s.sheetStatCellRollable)}
-                  onClick={() => onStatRoll?.(k, score)}
-                  role={onStatRoll ? "button" : undefined}
-                  title={onStatRoll ? tr.rollStatFmt.replace("{n}", abbr) : undefined}
+                  className={s.sheetStatCell}
                 >
                   <div className={s.sheetStatAbbr}>{abbr}</div>
                   <div className={s.sheetStatScore}>{score}</div>
@@ -509,11 +547,125 @@ function CharacterCard({
 
 // ── DM message ─────────────────────────────────────────────────
 
-function DmMessage({ message }: { message: Message }) {
+function DmMessage({
+  message,
+  allCharNames = new Set<string>(),
+  charNameColorMap = {},
+}: {
+  message: Message;
+  allCharNames?: Set<string>;
+  charNameColorMap?: Record<string, string>;
+}) {
   const { lang } = useLang();
   const tr = t[lang].play;
-  const { text } = parseRollRequests(message.content);
-  const paragraphs = text.split(/\n\n+/).filter(Boolean);
+
+  const combatData = parseCombatTurns(message.content);
+
+  const renderBody = () => {
+    if (!combatData) {
+      const { text } = parseRollRequests(message.content);
+      const paragraphs = text.split(/\n\n+/).filter(Boolean);
+      return paragraphs.length > 1
+        ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
+        : <p>{text}</p>;
+    }
+    return (
+      <>
+        {combatData.preamble && (
+          <div className={s.combatPreamble}>
+            {combatData.preamble.split(/\n\n+/).filter(Boolean).map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+        )}
+        <div className={s.combatTurns}>
+          {combatData.turns.map((turn, i) => {
+            const isPlayer = allCharNames.has(turn.actor);
+            const isBoss = !isPlayer && turn.tipo === "jefe";
+            const charColor = isPlayer ? (charNameColorMap[turn.actor] ?? "#b8860b") : null;
+            const { text: turnText } = parseRollRequests(turn.content);
+            const lines = turnText.split(/\n+/).filter(Boolean);
+
+            const turnClass = isPlayer
+              ? s.combatTurnPlayer
+              : isBoss ? s.combatTurnBoss : s.combatTurnNpc;
+            const headerClass = isPlayer
+              ? s.combatTurnHeaderPj
+              : isBoss ? s.combatTurnHeaderBoss : s.combatTurnHeaderNpc;
+            const badgeClass = isPlayer
+              ? s.combatTurnTypePj
+              : isBoss ? s.combatTurnTypeBoss : s.combatTurnTypeNpc;
+            const badgeLabel = isPlayer ? "PJ" : isBoss ? "JEFE" : "NPC";
+
+            return (
+              <div
+                key={i}
+                className={cx(s.combatTurn, turnClass)}
+                style={charColor ? { borderColor: `color-mix(in srgb, ${charColor} 30%, transparent)` } as React.CSSProperties : undefined}
+              >
+                {/* ─ Header band ─ */}
+                <div
+                  className={cx(s.combatTurnHeader, headerClass)}
+                  style={charColor ? { background: `color-mix(in srgb, ${charColor} 14%, #0a0500)` } as React.CSSProperties : undefined}
+                >
+                  {isPlayer ? (
+                    /* Sword icon for player */
+                    <svg width="12" height="12" viewBox="0 0 14 14" className={s.combatTurnIconPj} aria-hidden
+                      style={charColor ? { color: charColor } as React.CSSProperties : undefined}>
+                      <line x1="2" y1="12" x2="12" y2="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M9 2 L12 2 L12 5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                      <line x1="4" y1="8" x2="2.5" y2="9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                      <line x1="5.5" y1="9.5" x2="4" y2="11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    </svg>
+                  ) : isBoss ? (
+                    /* Crown icon for boss */
+                    <svg width="13" height="13" viewBox="0 0 14 14" className={s.combatTurnIconBoss} aria-hidden>
+                      <path d="M1 11 L2.5 5 L5.5 8.5 L7 3 L8.5 8.5 L11.5 5 L13 11 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                      <line x1="1" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                      <circle cx="7" cy="3" r="1" fill="currentColor"/>
+                    </svg>
+                  ) : (
+                    /* Skull icon for NPC */
+                    <svg width="12" height="12" viewBox="0 0 14 14" className={s.combatTurnIconNpc} aria-hidden>
+                      <circle cx="7" cy="5.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5"/>
+                      <line x1="4.5" y1="9" x2="4.5" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <line x1="7" y1="10" x2="7" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <line x1="9.5" y1="9" x2="9.5" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <circle cx="5.2" cy="5" r="0.9" fill="currentColor"/>
+                      <circle cx="8.8" cy="5" r="0.9" fill="currentColor"/>
+                      <path d="M5.8 7.5 Q7 8.8 8.2 7.5" stroke="currentColor" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+                    </svg>
+                  )}
+
+                  <span
+                    className={s.combatTurnActor}
+                    style={charColor ? { color: charColor } as React.CSSProperties : undefined}
+                  >
+                    {turn.actor}
+                  </span>
+
+                  <div className={s.combatTurnMeta}>
+                    <span className={cx(s.combatTurnTypeBadge, badgeClass)}>
+                      {badgeLabel}
+                    </span>
+                    {turn.iniciativa !== undefined && (
+                      <span className={s.combatTurnInit}>Init {turn.iniciativa}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ─ Content ─ */}
+                <div className={cx(s.combatTurnContent, isBoss && s.combatTurnContentBoss)}>
+                  {lines.map((line, j) => <p key={j}>{line}</p>)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className={s.msgDm}>
       <div className={s.msgDmHeader}>
@@ -528,9 +680,7 @@ function DmMessage({ message }: { message: Message }) {
         <span className={s.msgTime}>{fmtTime(message.created_at, tr.locale)}</span>
       </div>
       <div className={s.msgDmBody}>
-        {paragraphs.length > 1
-          ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
-          : <p>{text}</p>}
+        {renderBody()}
       </div>
     </div>
   );
@@ -601,6 +751,11 @@ function RollsPanel({
 
   const allDone = requests.every((r) => sharedRolls[r.personaje ?? "_"] !== undefined);
   const pendingCount = requests.filter((r) => sharedRolls[r.personaje ?? "_"] === undefined).length;
+
+  // Player can send if ALL pending rolls belong exclusively to their characters
+  const myRequests = requests.filter((r) => myCharNames.has(r.personaje ?? "_"));
+  const iAmSolePerson = myRequests.length > 0 && myRequests.length === requests.length;
+  const canISend = isLeader || iAmSolePerson;
 
   function handleRoll(i: number) {
     const r = requests[i];
@@ -705,14 +860,18 @@ function RollsPanel({
         })}
       </div>
 
-      {isLeader ? (
+      {canISend ? (
         <button
           className={s.rollsPanelSend}
           onClick={() => onSend(buildMessage())}
           disabled={!allDone || disabled}
           type="button"
         >
-          {allDone ? tr.rollSend : pendingCount === 1 ? tr.rollWaitingOneFmt.replace("{n}", String(pendingCount)) : tr.rollWaitingFmt.replace("{n}", String(pendingCount))}
+          {allDone
+            ? (iAmSolePerson && !isLeader ? tr.rollSendOwn : tr.rollSend)
+            : pendingCount === 1
+              ? tr.rollWaitingOneFmt.replace("{n}", String(pendingCount))
+              : tr.rollWaitingFmt.replace("{n}", String(pendingCount))}
         </button>
       ) : (
         <p className={s.rollsPanelNote}>{tr.rollLeaderNote}</p>
@@ -984,240 +1143,6 @@ function VoteModal({
   );
 }
 
-// ── Dice Panel ─────────────────────────────────────────────────
-
-const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100] as const;
-type DieType = (typeof DICE_TYPES)[number];
-
-interface RollEntry {
-  id: string;
-  die: DieType;
-  count: number;
-  modifier: number;
-  label?: string;
-  values: number[];
-  total: number;
-}
-
-interface TriggerRoll {
-  id: number;
-  die: DieType;
-  count: number;
-  modifier: number;
-  label: string;
-}
-
-function buildInsertText(e: RollEntry): string {
-  const mod = e.modifier;
-  const modStr = mod > 0 ? `+${mod}` : mod < 0 ? `${mod}` : "";
-  const lbl = e.label ? ` ${e.label}` : "";
-  if (e.count === 1 && mod === 0) return `[🎲 d${e.die}: ${e.values[0]}]`;
-  if (e.count === 1) return `[🎲${lbl} d${e.die}: ${e.values[0]}${modStr} = ${e.total}]`;
-  return `[🎲${lbl} ${e.count}d${e.die}: ${e.values.join("+")}${modStr} = ${e.total}]`;
-}
-
-const DicePanel = React.forwardRef<
-  HTMLDivElement,
-  { onInsert: (text: string) => void; triggerRoll?: TriggerRoll | null; onClose: () => void }
->(function DicePanel({ onInsert, triggerRoll, onClose }, ref) {
-  const { lang } = useLang();
-  const tr = t[lang].play;
-  const [count, setCount] = useState(1);
-  const [rolling, setRolling] = useState(false);
-  const [currentDie, setCurrentDie] = useState<DieType | null>(null);
-  const [currentCount, setCurrentCount] = useState(1);
-  const [currentModifier, setCurrentModifier] = useState(0);
-  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
-  const [animVals, setAnimVals] = useState<number[] | null>(null);
-  const [finalEntry, setFinalEntry] = useState<RollEntry | null>(null);
-  const [history, setHistory] = useState<RollEntry[]>([]);
-
-  const rollingRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  const triggerIdRef = useRef<number | null>(null);
-
-  const executeRoll = useCallback(
-    (die: DieType, rollCount: number, modifier: number, label?: string) => {
-      if (rollingRef.current) return;
-      clearInterval(timerRef.current);
-      const results = Array.from(
-        { length: rollCount },
-        () => Math.floor(Math.random() * die) + 1,
-      );
-      rollingRef.current = true;
-      setRolling(true);
-      setCurrentDie(die);
-      setCurrentCount(rollCount);
-      setCurrentModifier(modifier);
-      setCurrentLabel(label ?? null);
-      setFinalEntry(null);
-      setAnimVals(null);
-
-      let ticks = 0;
-      timerRef.current = setInterval(() => {
-        setAnimVals(
-          Array.from({ length: rollCount }, () => Math.floor(Math.random() * die) + 1),
-        );
-        ticks++;
-        if (ticks >= 12) {
-          clearInterval(timerRef.current);
-          const total = results.reduce((s, v) => s + v, 0) + modifier;
-          const entry: RollEntry = {
-            id: `${Date.now()}`,
-            die, count: rollCount, modifier, label,
-            values: results, total,
-          };
-          setAnimVals(results);
-          setFinalEntry(entry);
-          rollingRef.current = false;
-          setRolling(false);
-          setHistory((prev) => [entry, ...prev].slice(0, 8));
-        }
-      }, 50);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!triggerRoll || triggerRoll.id === triggerIdRef.current) return;
-    triggerIdRef.current = triggerRoll.id;
-    setCount(triggerRoll.count);
-    executeRoll(triggerRoll.die, triggerRoll.count, triggerRoll.modifier, triggerRoll.label);
-    // Reset on cleanup so Strict Mode's second pass can re-fire correctly.
-    return () => { triggerIdRef.current = null; };
-  }, [triggerRoll, executeRoll]);
-
-  useEffect(() => () => {
-    clearInterval(timerRef.current);
-    rollingRef.current = false; // Reset so Strict Mode's second pass isn't blocked.
-  }, []);
-
-  const displayVals = animVals ?? (finalEntry ? finalEntry.values : null);
-  const displayTotal = displayVals
-    ? displayVals.reduce((s, v) => s + v, 0) + currentModifier
-    : null;
-  const isMulti = currentCount > 1;
-  const hasModifier = currentModifier !== 0;
-  const modStr = currentModifier > 0
-    ? `+${currentModifier}`
-    : currentModifier < 0
-    ? `${currentModifier}`
-    : "";
-
-  return (
-    <div className={s.dicePanel} ref={ref}>
-      <div className={s.dicePanelTitle}>
-        <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
-          <rect x="1" y="1" width="10" height="10" rx="2.5" fill="none" stroke="#b8860b" strokeWidth="1.2" />
-          <circle cx="3.8" cy="3.8" r="1" fill="#b8860b" />
-          <circle cx="8.2" cy="3.8" r="1" fill="#b8860b" />
-          <circle cx="3.8" cy="8.2" r="1" fill="#b8860b" />
-          <circle cx="8.2" cy="8.2" r="1" fill="#b8860b" />
-        </svg>
-        {tr.diceTitle}
-        <button className={s.dicePanelClose} onClick={onClose} type="button" aria-label={tr.diceTitle}>✕</button>
-      </div>
-
-      {/* Count selector */}
-      <div className={s.diceCountRow}>
-        <span className={s.diceCountLabel}>{tr.diceCount}</span>
-        <div className={s.diceCountControls}>
-          <button
-            className={s.diceCountBtn}
-            onClick={() => setCount((c) => Math.max(1, c - 1))}
-            disabled={count <= 1 || rolling}
-            type="button"
-          >−</button>
-          <span className={s.diceCountVal}>{count}</span>
-          <button
-            className={s.diceCountBtn}
-            onClick={() => setCount((c) => Math.min(10, c + 1))}
-            disabled={count >= 10 || rolling}
-            type="button"
-          >+</button>
-        </div>
-      </div>
-
-      <div className={s.diceGrid}>
-        {DICE_TYPES.map((die) => (
-          <button
-            key={die}
-            className={cx(s.dieFace, rolling && currentDie === die && s.dieRolling)}
-            onClick={() => executeRoll(die, count, 0)}
-            disabled={rolling}
-            type="button"
-          >
-            {count > 1 ? `${count}d${die}` : `d${die}`}
-          </button>
-        ))}
-      </div>
-
-      {currentDie !== null && displayVals && (
-        <div className={cx(s.diceResultArea, rolling && s.diceResultAnimating)}>
-          <div className={s.diceResultHeader}>
-            <span className={s.diceResultDie}>
-              {currentCount > 1 ? `${currentCount}d${currentDie}` : `d${currentDie}`}
-              {currentLabel ? ` · ${currentLabel}` : ""}
-            </span>
-            {!rolling && finalEntry && (
-              <button
-                className={s.diceInsertBtn}
-                onClick={() => onInsert(buildInsertText(finalEntry))}
-                type="button"
-              >
-                {tr.diceInsert}
-              </button>
-            )}
-          </div>
-
-          {isMulti ? (
-            <div className={s.diceResultMulti}>
-              <div className={s.diceResultVals}>
-                {displayVals.map((v, i) => (
-                  <span key={i} className={s.diceResultVal}>{v}</span>
-                ))}
-                {hasModifier && (
-                  <span className={s.diceResultMod}>{modStr}</span>
-                )}
-              </div>
-              <div className={s.diceResultTotalRow}>
-                <span className={s.diceResultTotalEq}>=</span>
-                <span className={s.diceResultTotal}>{displayTotal}</span>
-              </div>
-            </div>
-          ) : (
-            <div className={s.diceResultSingle}>
-              <span className={s.diceResultNum}>{displayVals[0]}</span>
-              {hasModifier && (
-                <div className={s.diceResultModRow}>
-                  <span className={s.diceResultMod}>{modStr}</span>
-                  <span className={s.diceResultTotalEq}>=</span>
-                  <span className={s.diceResultTotal}>{displayTotal}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {history.length > 1 && (
-        <div className={s.rollHistory}>
-          <div className={s.rollHistoryTitle}>{tr.diceHistory}</div>
-          <div className={s.rollHistoryList}>
-            {history.slice(1).map((r) => (
-              <span key={r.id} className={s.rollHistoryEntry} title={r.label}>
-                <span className={s.rollHistoryDie}>
-                  {r.count > 1 ? `${r.count}d${r.die}` : `d${r.die}`}
-                </span>
-                <span className={s.rollHistoryVal}>{r.total}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
 
 // ── Vote types ─────────────────────────────────────────────────
 
@@ -1249,12 +1174,11 @@ export default function Play() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [dmThinking, setDmThinking] = useState(false);
+  const [partyWiped, setPartyWiped] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sheetChar, setSheetChar]     = useState<Character | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [diceOpen, setDiceOpen] = useState(false);
-  const [diceStatTrigger, setDiceStatTrigger] = useState<TriggerRoll | null>(null);
-  const [kicked, setKicked] = useState(false);
+const [kicked, setKicked] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Map<string, { name: string; color: string }>>(new Map());
   const [activeVote, setActiveVote] = useState<ActiveVote | null>(null);
   const [voteCountdown, setVoteCountdown] = useState(0);
@@ -1262,15 +1186,15 @@ export default function Play() {
   const [actCooldown, setActCooldown] = useState(0);
   const [rateLimitSecsLeft, setRateLimitSecsLeft] = useState(0);
   const [rateLimitType, setRateLimitType] = useState<"minute" | "day" | null>(null);
+  const [voiceInterim, setVoiceInterim] = useState("");
   const [levelUpQueue, setLevelUpQueue] = useState<LevelUpItem[]>([]);
   const [itemGrantQueue, setItemGrantQueue] = useState<ItemGrantItem[]>([]);
+  const [deathNotice, setDeathNotice] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isFirstScroll = useRef(true);
-  const diceBtnRef = useRef<HTMLButtonElement>(null);
-  const dicePanelRef = useRef<HTMLDivElement>(null);
-  // Refs so Realtime callbacks always access the latest campaign/userId
+// Refs so Realtime callbacks always access the latest campaign/userId
   const campaignRef = useRef<CampaignDetail | null>(null);
   const userIdRef   = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1337,6 +1261,18 @@ export default function Play() {
       }
       loader.stop();
       setLoading(false);
+
+      // Stamp started_at the moment the DM enters the play screen (covers
+      // campaigns created before this field existed, or where the intro path
+      // didn't fire yet). The PATCH broadcasts campaign_started to all dashboards.
+      if (camp.user_id === u.id && !camp.started_at) {
+        const now = new Date().toISOString();
+        fetch(`/api/campaigns/${camp.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ started_at: now }),
+        }).catch(() => {});
+      }
 
       // Only the campaign owner (DM) triggers the opening narration.
       // Players receive it via polling once it's saved to the database.
@@ -1473,6 +1409,27 @@ export default function Play() {
   }, []);
 
 
+  // ── Apply character deaths ────────────────────────────────────
+
+  const applyCharacterDeaths = useCallback((deaths: CharacterDeathItem[], currentUserId: string) => {
+    if (!deaths.length) return;
+    const deadIds = new Set(deaths.map((d) => d.character_id));
+    const deadNames = deaths.map((d) => d.name);
+    setDeathNotice((prev) => [...prev, ...deadNames]);
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      return { ...prev, characters: prev.characters.filter((c) => !deadIds.has(c.id)) };
+    });
+    setActiveCharId((prev) => {
+      if (!deadIds.has(prev)) return prev;
+      // Active character died — pick the first surviving character owned by this user
+      const surviving = campaignRef.current?.characters.filter(
+        (c) => !deadIds.has(c.id) && c.user_id === currentUserId,
+      );
+      return surviving?.[0]?.id ?? "";
+    });
+  }, []);
+
   // ── Rate limit countdown (shared by sender + broadcast receivers) ─
 
   const startRateLimitCountdown = useCallback((limitType: "minute" | "day", secs: number) => {
@@ -1545,11 +1502,12 @@ export default function Play() {
         setItemGrantQueue([]);
       })
       .on("broadcast", { event: "dm_response" }, ({ payload }: { payload: unknown }) => {
-        const { hp_updates, level_updates, item_grants, slot_updates, hd_updates, ...msg } = payload as Message & {
+        const { hp_updates, level_updates, item_grants, slot_updates, hd_updates, character_deaths, ...msg } = payload as Message & {
           hp_updates?: HpUpdateItem[];
           level_updates?: LevelUpItem[];
           item_grants?: ItemGrantItem[];
           slot_updates?: SlotUpdateItem[];
+          character_deaths?: CharacterDeathItem[];
           hd_updates?: HitDiceUpdateItem[];
         };
         setMessages((prev) => {
@@ -1562,6 +1520,11 @@ export default function Play() {
         if (item_grants?.length) applyItemGrants(item_grants);
         if (slot_updates?.length) applySlotUpdates(slot_updates);
         if (hd_updates?.length) applyHitDiceUpdates(hd_updates);
+        if (character_deaths?.length) applyCharacterDeaths(character_deaths, userIdRef.current);
+      })
+      .on("broadcast", { event: "party_wiped" }, () => {
+        setDmThinking(false);
+        setPartyWiped(true);
       })
       .on("broadcast", { event: "slot_update" }, ({ payload }: { payload: unknown }) => {
         const { character_id, spell_slots_used } = payload as { character_id: string; spell_slots_used: Record<string, number> };
@@ -1640,6 +1603,68 @@ export default function Play() {
       .on("broadcast", { event: "rate_limit" }, ({ payload }: { payload: unknown }) => {
         const { limit_type, retry_in } = payload as { limit_type: "minute" | "day"; retry_in: number };
         startRateLimitCountdown(limit_type ?? "minute", retry_in ?? 0);
+      })
+      // ── Broadcast: new character joined mid-session ───────────
+      .on("broadcast", { event: "player_joined_narration" }, ({ payload }: { payload: unknown }) => {
+        const { character_name, character_class, character_level } = payload as {
+          character_name: string; character_class: string; character_level: number;
+        };
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+
+        // Re-fetch party so the HUD reflects the new member
+        fetch(`/api/campaigns/${camp?.id}`)
+          .then((r) => r.ok ? r.json() as Promise<CampaignDetail> : null)
+          .then((updated) => { if (updated) setCampaign(updated); })
+          .catch(() => {});
+
+        // Only the DM triggers the AI narration (avoids duplicate calls)
+        if (!camp || uid !== camp.user_id) return;
+
+        setDmThinking(true);
+        fetch(`/api/campaigns/${camp.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            party_event: "player_joined",
+            party_event_data: { name: character_name, class: character_class, level: character_level },
+            lang: langStore.get(),
+          }),
+        })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => { if (!data?.dm_response) setDmThinking(false); })
+          .catch(() => setDmThinking(false));
+      })
+      // ── Broadcast: character removed mid-session ──────────────
+      .on("broadcast", { event: "player_expelled_narration" }, ({ payload }: { payload: unknown }) => {
+        const { character_name, character_class, character_level } = payload as {
+          character_name: string; character_class: string; character_level: number;
+        };
+        const uid  = userIdRef.current;
+        const camp = campaignRef.current;
+
+        // Re-fetch party so the HUD removes the expelled member
+        fetch(`/api/campaigns/${camp?.id}`)
+          .then((r) => r.ok ? r.json() as Promise<CampaignDetail> : null)
+          .then((updated) => { if (updated) setCampaign(updated); })
+          .catch(() => {});
+
+        // Only the DM triggers the AI narration (avoids duplicate calls)
+        if (!camp || uid !== camp.user_id) return;
+
+        setDmThinking(true);
+        fetch(`/api/campaigns/${camp.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            party_event: "player_left",
+            party_event_data: { name: character_name, class: character_class, level: character_level },
+            lang: langStore.get(),
+          }),
+        })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => { if (!data?.dm_response) setDmThinking(false); })
+          .catch(() => setDmThinking(false));
       })
       // ── Broadcast: shared player roll result ──────────────────
       .on("broadcast", { event: "player_roll" }, ({ payload }: { payload: unknown }) => {
@@ -1726,24 +1751,26 @@ export default function Play() {
     ta.style.height = `${Math.min(ta.scrollHeight, 130)}px`;
   }, [input]);
 
-  // ── Close dice panel on outside click ─────────────────────
+  // ── Voice input ────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!diceOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        !diceBtnRef.current?.contains(target) &&
-        !dicePanelRef.current?.contains(target)
-      ) {
-        setDiceOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [diceOpen]);
+  const handleFinalTranscript = useCallback((text: string) => {
+    setInput((prev) => (prev.trim() ? prev.trim() + " " + text : text));
+  }, []);
 
-  // ── Leave session ─────────────────────────────────────
+  const handleInterimTranscript = useCallback((text: string) => {
+    setVoiceInterim(text);
+  }, []);
+
+  const speechLang = SPEECH_LANG[campaign?.game_language ?? "es"] ?? "es-ES";
+
+  const { voiceState, isSupported: voiceSupported, errorMsg: voiceError, toggle: toggleVoice } =
+    useVoiceInput({
+      lang: speechLang,
+      onFinalTranscript: handleFinalTranscript,
+      onInterimTranscript: handleInterimTranscript,
+    });
+
+// ── Leave session ─────────────────────────────────────
   // DM leaving resets started_at (so lobby shows waiting state) and broadcasts
   // dm_left so all connected players are immediately redirected to dashboard.
 
@@ -1867,6 +1894,7 @@ export default function Play() {
         item_grants?: ItemGrantItem[];
         slot_updates?: SlotUpdateItem[];
         hd_updates?: HitDiceUpdateItem[];
+        character_deaths?: CharacterDeathItem[];
       };
 
       setMessages((prev) => {
@@ -1882,6 +1910,7 @@ export default function Play() {
       // item_grants applied via broadcast only — avoids double-append on the sender
       if (data.slot_updates?.length) applySlotUpdates(data.slot_updates);
       if (data.hd_updates?.length) applyHitDiceUpdates(data.hd_updates);
+      if (data.character_deaths?.length) applyCharacterDeaths(data.character_deaths, userId);
 
       if (data.dm_error === "rate_limit") {
         const limitType = data.limit_type ?? "minute";
@@ -2019,27 +2048,7 @@ export default function Play() {
     [handleActRequest],
   );
 
-  const handleDiceInsert = useCallback((text: string) => {
-    setInput((prev) => (prev ? `${prev} ${text}` : text));
-    textareaRef.current?.focus();
-  }, []);
-
-  const handleStatRoll = useCallback(
-    (stat: keyof CharacterStats, score: number) => {
-      const mod = Math.floor((score - 10) / 2);
-      setDiceOpen(true);
-      setDiceStatTrigger({
-        id: Date.now(),
-        die: STAT_DIE[stat],
-        count: 1,
-        modifier: mod,
-        label: tr.rollStatFmt.replace("{n}", STAT_ABBR[stat]),
-      });
-    },
-    [tr.rollStatFmt],
-  );
-
-  // ── Player roll handler (broadcasts to other players) ─────
+// ── Player roll handler (broadcasts to other players) ─────
 
   const handlePlayerRoll = useCallback((charName: string, diceRoll: number) => {
     setSharedRolls((prev) => ({ ...prev, [charName]: diceRoll }));
@@ -2119,6 +2128,18 @@ export default function Play() {
     [campaign?.characters],
   );
 
+  const allCharNames = useMemo(
+    () => new Set((campaign?.characters ?? []).map((c) => c.name)),
+    [campaign?.characters],
+  );
+
+  const charNameColorMap = useMemo(
+    () => Object.fromEntries(
+      (campaign?.characters ?? []).map((c, i) => [c.name, AVATAR_COLORS[i % AVATAR_COLORS.length]]),
+    ),
+    [campaign?.characters],
+  );
+
   const lastMsg = messages[messages.length - 1];
   const pendingRolls = useMemo(() => {
     if (dmThinking || !lastMsg || lastMsg.role !== "dm") return [];
@@ -2147,6 +2168,21 @@ export default function Play() {
           <p>{tr.notFound}</p>
           <button className={s.btnSecondary} onClick={() => router.push("/dashboard")}>
             {tr.backToHall}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (partyWiped) {
+    return (
+      <div className={s.page}>
+        <div className={s.stars} aria-hidden />
+        <div className={s.notFound}>
+          <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{tr.partyWipedTitle}</p>
+          <p style={{ opacity: 0.7, marginBottom: "1.5rem" }}>{tr.partyWipedMsg}</p>
+          <button className={s.btnSecondary} onClick={() => { loader.start(); router.push("/dashboard"); }}>
+            {tr.partyWipedBtn}
           </button>
         </div>
       </div>
@@ -2222,25 +2258,6 @@ export default function Play() {
         </div>
 
         <div className={s.headerRight}>
-          <span className={s.msgCounter}>
-            {messages.length} {messages.length === 1 ? tr.turnOne : tr.turnMany}
-          </span>
-          <button
-            ref={diceBtnRef}
-            className={cx(s.diceBtn, diceOpen && s.diceBtnActive)}
-            onClick={() => setDiceOpen((v) => !v)}
-            type="button"
-            title={tr.diceBtn}
-          >
-            <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden>
-              <rect x="1.5" y="1.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-              <circle cx="5" cy="5" r="1.1" fill="currentColor" />
-              <circle cx="9" cy="5" r="1.1" fill="currentColor" />
-              <circle cx="5" cy="9" r="1.1" fill="currentColor" />
-              <circle cx="9" cy="9" r="1.1" fill="currentColor" />
-            </svg>
-            {tr.diceBtn}
-          </button>
           <button
             className={s.sidebarToggle}
             onClick={() => setSidebarOpen((v) => !v)}
@@ -2316,7 +2333,6 @@ export default function Play() {
               character={liveChar}
               color={AVATAR_COLORS[idx >= 0 ? idx % AVATAR_COLORS.length : 0]}
               onClose={() => setSheetChar(null)}
-              onStatRoll={owner ? handleStatRoll : undefined}
               isOwner={owner}
             />
           );
@@ -2342,20 +2358,32 @@ export default function Play() {
                   <strong>{tr.emptyAct}</strong> {tr.emptyHint3}
                 </p>
               </div>
-            ) : (
-              messages.map((msg) =>
-                msg.role === "dm" ? (
-                  <DmMessage key={msg.id} message={msg} />
-                ) : (
-                  <CharMessage
-                    key={msg.id}
-                    message={msg}
-                    color={charColorMap[msg.character_id ?? ""] ?? AVATAR_COLORS[0]}
-                    imageUrl={charImgMap[msg.character_id ?? ""] ?? null}
-                  />
-                ),
-              )
-            )}
+            ) : (() => {
+                const nodes: React.ReactNode[] = [];
+                for (const msg of messages) {
+                  if (msg.role === "dm") {
+                    nodes.push(
+                      <DmMessage
+                        key={msg.id}
+                        message={msg}
+                        allCharNames={allCharNames}
+                        charNameColorMap={charNameColorMap}
+                      />,
+                    );
+                  } else {
+                    nodes.push(
+                      <CharMessage
+                        key={msg.id}
+                        message={msg}
+                        color={charColorMap[msg.character_id ?? ""] ?? AVATAR_COLORS[0]}
+                        imageUrl={charImgMap[msg.character_id ?? ""] ?? null}
+                      />,
+                    );
+                  }
+                }
+                return nodes;
+              })()
+            }
 
             {[...typingUsers.entries()].map(([charId, { name, color }]) => (
               <TypingIndicator key={charId} name={name} color={color} />
@@ -2369,6 +2397,23 @@ export default function Play() {
             )}
             {!dmThinking && itemGrantQueue.length > 0 && (
               <ItemGrantNote grants={itemGrantQueue} />
+            )}
+            {deathNotice.length > 0 && (
+              <div className={s.deathNotice}>
+                <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden>
+                  <circle cx="10" cy="8" r="6" fill="none" stroke="#8b2020" strokeWidth="1.5"/>
+                  <line x1="6.5" y1="14" x2="6.5" y2="18" stroke="#8b2020" strokeWidth="1.5" strokeLinecap="round"/>
+                  <line x1="10" y1="15" x2="10" y2="19" stroke="#8b2020" strokeWidth="1.5" strokeLinecap="round"/>
+                  <line x1="13.5" y1="14" x2="13.5" y2="18" stroke="#8b2020" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="7.5" cy="7.5" r="1.2" fill="#8b2020"/>
+                  <circle cx="12.5" cy="7.5" r="1.2" fill="#8b2020"/>
+                  <path d="M8 11 Q10 12.5 12 11" stroke="#8b2020" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+                </svg>
+                <span>
+                  {deathNotice.join(", ")} {deathNotice.length === 1 ? tr.deathSingular : tr.deathPlural}
+                </span>
+                <button className={s.deathNoticeClose} onClick={() => setDeathNotice([])}>✕</button>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -2426,7 +2471,11 @@ export default function Play() {
               </div>
             )}
 
-            <div className={s.inputRow}>
+            {voiceError && (
+              <div className={s.voiceError}>{voiceError}</div>
+            )}
+
+            <div className={s.inputBox}>
               <textarea
                 ref={textareaRef}
                 className={s.textarea}
@@ -2442,54 +2491,77 @@ export default function Play() {
                 rows={2}
               />
 
-              <div className={s.sendButtons}>
-                <button
-                  className={s.btnSpeak}
-                  onClick={() => handleSend(false)}
-                  disabled={!input.trim() || sending || dmThinking}
-                  type="button"
-                  title={tr.speakBtn}
-                >
-                  <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
-                    <path d="M2 2h10a1 1 0 011 1v5.5a1 1 0 01-1 1H8.5L6 12V9.5H3a1 1 0 01-1-1V3a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                  </svg>
-                  {tr.speakBtn}
-                </button>
-                <button
-                  className={s.btnAct}
-                  onClick={handleActRequest}
-                  disabled={!input.trim() || sending || dmThinking || actCooldown > 0}
-                  type="button"
-                  title={tr.actBtn}
-                >
-                  {sending && dmThinking ? (
-                    <span className={s.btnSpinner} />
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
-                      <line x1="3" y1="11" x2="11" y2="3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                      <polyline points="6,3 11,3 11,8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+              <div className={s.inputActions}>
+                {(voiceInterim || voiceState === "listening") ? (
+                  <div className={s.voiceBarInline}>
+                    <span className={s.voiceDot} />
+                    <span className={s.voiceInterim}>
+                      {voiceInterim || "Escuchando..."}
+                    </span>
+                  </div>
+                ) : <span />}
+
+                <div className={s.inputBtns}>
+                  {voiceSupported && (
+                    <button
+                      className={cx(s.btnMic, voiceState === "listening" && s.btnMicActive)}
+                      onClick={() => toggleVoice(speechLang)}
+                      disabled={sending || dmThinking}
+                      type="button"
+                      title={voiceState === "listening" ? "Detener grabación" : "Usar micrófono"}
+                      aria-label={voiceState === "listening" ? "Detener grabación" : "Usar micrófono"}
+                    >
+                      {voiceState === "listening" ? (
+                        <svg width="12" height="12" viewBox="0 0 13 13" aria-hidden>
+                          <rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" />
+                        </svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 13 13" aria-hidden>
+                          <rect x="4.5" y="1" width="4" height="7" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+                          <path d="M2 6.5a4.5 4.5 0 009 0" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                          <line x1="6.5" y1="11" x2="6.5" y2="13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                      )}
+                    </button>
                   )}
-                  {sending ? tr.sending : actCooldown > 0 ? `${actCooldown}s` : tr.actBtn}
-                </button>
+                  <button
+                    className={s.btnSpeak}
+                    onClick={() => handleSend(false)}
+                    disabled={!input.trim() || sending || dmThinking}
+                    type="button"
+                    title={tr.speakBtn}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden>
+                      <path d="M2 2h10a1 1 0 011 1v5.5a1 1 0 01-1 1H8.5L6 12V9.5H3a1 1 0 01-1-1V3a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                    </svg>
+                    {tr.speakBtn}
+                  </button>
+                  <button
+                    className={s.btnAct}
+                    onClick={handleActRequest}
+                    disabled={!input.trim() || sending || dmThinking || actCooldown > 0}
+                    type="button"
+                    title={tr.actBtn}
+                  >
+                    {sending && dmThinking ? (
+                      <span className={s.btnSpinner} />
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden>
+                        <line x1="3" y1="11" x2="11" y2="3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        <polyline points="6,3 11,3 11,8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {sending ? tr.sending : actCooldown > 0 ? `${actCooldown}s` : tr.actBtn}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className={s.inputHint}>
-              <kbd>Ctrl+Enter</kbd> {tr.inputHint}
-            </div>
           </div>
         </main>
       </div>
 
-      {diceOpen && (
-        <DicePanel
-          ref={dicePanelRef}
-          onInsert={handleDiceInsert}
-          triggerRoll={diceStatTrigger}
-          onClose={() => setDiceOpen(false)}
-        />
-      )}
+
     </div>
   );
 }

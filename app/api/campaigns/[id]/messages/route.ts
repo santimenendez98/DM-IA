@@ -108,7 +108,21 @@ function buildSystemInstruction(
     // ── NPCs / monstruos ─────────────────────────────────────────
     `\nNPCs/MONSTRUOS — resuelves tú, inline:`,
     `[🎲 1d20+MOD = TOTAL → resultado]. Nat20 = crítico (daño ×2). Nat1 = fallo crítico.`,
-    `Iniciativa al inicio de combate: tira 1d20+DES por criatura, ordena y narra. Ataque vs CA del PJ → tú resuelves y narras el daño con HP_UPDATE.`,
+    `Iniciativa al inicio de combate: tira 1d20+DES por criatura, ordena. Ataque vs CA del PJ → tú resuelves y narras el daño con HP_UPDATE.`,
+
+    // ── Formato de combate y acciones ────────────────────────────
+    `\nFORMATO TURNOS — OBLIGATORIO en combate activo y en escenas con orden de actuación:`,
+    `Cada turno lleva esta línea exacta (línea propia, sin nada antes ni después):`,
+    `TURNO:{"actor":"Nombre exacto","tipo":"jugador|npc|jefe","iniciativa":14}`,
+    `· tipo="jugador" → personaje del jugador. · tipo="npc" → monstruo/aliado/NPC neutro. · tipo="jefe" → enemigo principal, boss, villain.`,
+    `Seguido inmediatamente de 1-3 frases del turno de ese actor.`,
+    `NPCs/jefes: tirada inline [🎲 1d20+MOD = TOTAL → resultado], daño narrado, HP_UPDATE al final del bloque.`,
+    `Jugadores: TIRADA_JUGADOR al final del bloque de ese personaje si se requiere tirada.`,
+    `Orden estricto de iniciativa (mayor a menor). UN bloque TURNO: por actor por ronda, sin mezclar dos actores en el mismo bloque.`,
+    `El resumen de iniciativas y la situación general va ANTES del primer TURNO:, sin marcador.`,
+    `Fuera de combate y diálogo: NO uses TURNO:. Narra normalmente con párrafos.`,
+    `EJEMPLO (ronda con jefe + NPC + 2 jugadores):`,
+    `Iniciativas: Archimago 19, Guardia 14, Lyra 11, Thorin 8.\nTURNO:{"actor":"Archimago","tipo":"jefe","iniciativa":19}\nEl Archimago extiende la mano y lanza un rayo de frío sobre Thorin. [🎲 1d20+7 = 18 vs CA 15 → GOLPE] El rayo impacta causando 14 de daño de frío.\nHP_UPDATE:{"personaje":"Thorin","hp":6}\nTURNO:{"actor":"Guardia Oscuro","tipo":"npc","iniciativa":14}\nEl guardia flanquea a Lyra con su espada. [🎲 1d20+4 = 9 vs CA 13 → FALLO] El golpe no consigue alcanzarla.\nTURNO:{"actor":"Lyra","tipo":"jugador","iniciativa":11}\nLyra, el guardia falló su ataque. Tienes ventaja desde esta posición.\nTIRADA_JUGADOR:{"dado":"1d20","mod":"DES","bono_prof":true,"tipo":"Ataque","cd":14,"personaje":"Lyra"}\nTURNO:{"actor":"Thorin","tipo":"jugador","iniciativa":8}\nThorin, estás a 6 PV tras el rayo. El Archimago está a 30 pies.\nTIRADA_JUGADOR:{"dado":"1d20","mod":"FUE","bono_prof":true,"tipo":"Ataque","cd":16,"personaje":"Thorin"}`,
 
     // ── Tiradas de jugadores ─────────────────────────────────────
     `\nTIRADAS DE JUGADORES — obligatorio pedir en estos casos (NO omitir):`,
@@ -136,6 +150,13 @@ function buildSystemInstruction(
     `LONG_REST:{}  ← descanso largo completado. NO emitas HP_UPDATE, el sistema restaura PV y GD automáticamente.`,
     `SHORT_REST:{}  ← descanso corto completado (Brujo recupera ranuras de Pacto).`,
     `HIT_DICE_SPEND:{"personaje":"Nombre","cantidad":1}  ← cuando un PJ gasta Dados de Golpe en descanso corto. "cantidad" = dados gastados (1 por tirada). Emitir DESPUÉS de recibir el resultado de la tirada de Dado de Golpe.`,
+    `CHARACTER_DEATH:{"personaje":"Nombre"}  ← cuando un PJ muere definitivamente (3 fallos de tirada de muerte, daño masivo que baja PV a negativo igual al máximo, o muerte narrativa irreversible). Narra la muerte ANTES de emitir este marcador. El sistema eliminará al personaje de la partida automáticamente. HP_UPDATE con hp:0 debe emitirse también.`,
+
+    // ── Acciones de jugadores ────────────────────────────────────
+    `\nACCIONES DE JUGADORES — regla absoluta:`,
+    `Narra ÚNICAMENTE lo que el jugador declaró. Si dice "me acerco corriendo con 2 hachas buscando atacar", describe las consecuencias de esa acción en el mundo (la reacción del enemigo, el entorno, el resultado mecánico) pero NO añadas palabras, emociones, pensamientos, movimientos adicionales ni diálogo al personaje que el jugador no indicó.`,
+    `Nunca escribas frases como "[Personaje] grita", "[Personaje] siente", "[Personaje] piensa", "[Personaje] dice" a menos que el jugador haya incluido esas palabras explícitamente.`,
+    `La historia avanza con lo que los jugadores declaran, no con lo que tú imaginas que harían.`,
 
     // ── Narrativa ────────────────────────────────────────────────
     `\nNARRATIVA: Párrafos cortos (3-4 oraciones), máximo 4 párrafos. ${LANG_INSTRUCTION[lang]}`,
@@ -342,6 +363,36 @@ function parseRests(
   return { text: text.replace(/\n{3,}/g, "\n\n").trim(), restSlotUpdates, restHpUpdates, restHdUpdates };
 }
 
+interface CharacterDeathItem {
+  character_id: string;
+  name: string;
+}
+
+function parseCharacterDeaths(
+  content: string,
+  characters: Character[],
+): { text: string; deaths: CharacterDeathItem[] } {
+  const deaths: CharacterDeathItem[] = [];
+  const text = content
+    .replace(/CHARACTER_DEATH:\s*\{[^}]+\}/g, (match) => {
+      try {
+        const json = JSON.parse(match.slice("CHARACTER_DEATH:".length).trim()) as {
+          personaje: string;
+        };
+        const char = characters.find(
+          (c) => c.name.toLowerCase() === json.personaje.toLowerCase(),
+        );
+        if (char) {
+          deaths.push({ character_id: char.id, name: char.name });
+        }
+      } catch { /* ignore malformed */ }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, deaths };
+}
+
 function parseHitDiceSpend(
   content: string,
   characters: Character[],
@@ -507,11 +558,13 @@ export async function POST(
     return NextResponse.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const { character_id, content, invoke_dm, dm_intro } = body as {
+  const { character_id, content, invoke_dm, dm_intro, party_event, party_event_data } = body as {
     character_id?: string;
     content?: string;
     invoke_dm?: boolean;
     dm_intro?: boolean;
+    party_event?: "player_joined";
+    party_event_data?: { name: string; class: string; level: number };
   };
 
   // Language is set at campaign level, not per-message
@@ -520,6 +573,15 @@ export async function POST(
     : "es");
 
   const admin = createAdminClient();
+
+  // Lazily stamp started_at the first time any message is posted.
+  // Covers old campaigns (pre-field) and direct /play URL access.
+  if (!(campaign as unknown as { started_at?: string | null }).started_at) {
+    const now = new Date().toISOString();
+    await admin.from("campaigns").update({ started_at: now }).eq("id", campaignId);
+    (campaign as unknown as Record<string, unknown>).started_at = now;
+    broadcastToChannel(`user-${user.id}`, "campaign_started", { campaign_id: campaignId, started_at: now });
+  }
 
   // ── DM intro mode ────────────────────────────────────────────
   if (dm_intro) {
@@ -594,6 +656,158 @@ export async function POST(
       { dm_response: { ...dmMsg, character_name: null } },
       { status: 201 },
     );
+  }
+
+  // ── Party event: player joined mid-session ───────────────────
+  if (party_event === "player_joined" && party_event_data) {
+    const { data: existingMsg } = await admin
+      .from("campaign_messages")
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingMsg) return NextResponse.json({ skipped: true });
+
+    const eventRateLimit = await checkDMRateLimit(user.id);
+    if (!eventRateLimit.allowed) return NextResponse.json({ skipped: "rate_limited" });
+
+    const eventPartyRows = (campaign.campaign_characters as Array<{
+      character_id: string; characters: unknown;
+    }>) ?? [];
+    const eventCharacters = eventPartyRows.map((r) => r.characters) as Character[];
+
+    const joinInstruction =
+      buildSystemInstruction(campaign, eventCharacters, lang) +
+      `\n\nEVENTO: El aventurero ${party_event_data.name} (${party_event_data.class} Nivel ${party_event_data.level}) acaba de incorporarse al grupo durante la partida. Narra en 1-2 párrafos cómo hace su entrada en escena de forma coherente con el momento actual de la historia. No pidas acciones todavía.`;
+
+    const { data: eventHistory } = await admin
+      .from("campaign_messages")
+      .select("role, content, characters(name)")
+      .eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const evtHistory = (eventHistory ?? [])
+      .slice()
+      .reverse()
+      .map((m) => {
+        const raw = m as unknown as { role: string; content: string; characters: { name: string } | Array<{ name: string }> | null };
+        const chars = raw.characters;
+        const charName = Array.isArray(chars) ? chars[0]?.name : chars?.name;
+        return { role: raw.role as "user" | "dm", content: charName ? `${charName}: ${raw.content}` : raw.content };
+      });
+
+    const evtDmHistory: typeof evtHistory =
+      evtHistory[0]?.role === "dm"
+        ? [{ role: "user", content: "Comienza la aventura." }, ...evtHistory]
+        : evtHistory;
+
+    let evtDmContent: string;
+    try {
+      evtDmContent = await callDM(joinInstruction, evtDmHistory);
+    } catch (e) {
+      console.error("OpenRouter party_event error:", e);
+      return NextResponse.json({ skipped: "dm_error" });
+    }
+
+    const { count: evtCount } = await admin
+      .from("campaign_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("campaign_id", campaignId);
+
+    const { data: evtMsg, error: evtErr } = await admin
+      .from("campaign_messages")
+      .insert({
+        campaign_id: campaignId,
+        character_id: null,
+        role: "dm",
+        content: evtDmContent,
+        turn_number: (evtCount ?? 0) + 1,
+      })
+      .select()
+      .single();
+
+    if (evtErr) return NextResponse.json({ skipped: "insert_error" });
+
+    broadcastToChannel(`play:${campaignId}`, "dm_response", { ...evtMsg, character_name: null });
+    return NextResponse.json({ dm_response: { ...evtMsg, character_name: null } });
+  }
+
+  // ── Party event: player expelled mid-session ─────────────────
+  if (party_event === "player_left" && party_event_data) {
+    const { data: existingMsgLeft } = await admin
+      .from("campaign_messages")
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingMsgLeft) return NextResponse.json({ skipped: true });
+
+    const leftRateLimit = await checkDMRateLimit(user.id);
+    if (!leftRateLimit.allowed) return NextResponse.json({ skipped: "rate_limited" });
+
+    const leftPartyRows = (campaign.campaign_characters as Array<{
+      character_id: string; characters: unknown;
+    }>) ?? [];
+    const leftCharacters = leftPartyRows.map((r) => r.characters) as Character[];
+
+    const leftInstruction =
+      buildSystemInstruction(campaign, leftCharacters, lang) +
+      `\n\nEVENTO: El aventurero ${party_event_data.name} (${party_event_data.class} Nivel ${party_event_data.level}) ha abandonado el grupo y ya no forma parte de la historia. Narra en 1-2 párrafos cómo el grupo reacciona a su partida de forma coherente con el momento actual. No pidas acciones todavía.`;
+
+    const { data: leftHistory } = await admin
+      .from("campaign_messages")
+      .select("role, content, characters(name)")
+      .eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const leftMsgHistory = (leftHistory ?? [])
+      .slice()
+      .reverse()
+      .map((m) => {
+        const raw = m as unknown as { role: string; content: string; characters: { name: string } | Array<{ name: string }> | null };
+        const chars = raw.characters;
+        const charName = Array.isArray(chars) ? chars[0]?.name : chars?.name;
+        return { role: raw.role as "user" | "dm", content: charName ? `${charName}: ${raw.content}` : raw.content };
+      });
+
+    const leftDmHistory: typeof leftMsgHistory =
+      leftMsgHistory[0]?.role === "dm"
+        ? [{ role: "user", content: "Comienza la aventura." }, ...leftMsgHistory]
+        : leftMsgHistory;
+
+    let leftDmContent: string;
+    try {
+      leftDmContent = await callDM(leftInstruction, leftDmHistory);
+    } catch (e) {
+      console.error("OpenRouter player_left error:", e);
+      return NextResponse.json({ skipped: "dm_error" });
+    }
+
+    const { count: leftCount } = await admin
+      .from("campaign_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("campaign_id", campaignId);
+
+    const { data: leftMsg, error: leftErr } = await admin
+      .from("campaign_messages")
+      .insert({
+        campaign_id: campaignId,
+        character_id: null,
+        role: "dm",
+        content: leftDmContent,
+        turn_number: (leftCount ?? 0) + 1,
+      })
+      .select()
+      .single();
+
+    if (leftErr) return NextResponse.json({ skipped: "insert_error" });
+
+    broadcastToChannel(`play:${campaignId}`, "dm_response", { ...leftMsg, character_name: null });
+    return NextResponse.json({ dm_response: { ...leftMsg, character_name: null } });
   }
 
   if (!character_id) {
@@ -723,6 +937,10 @@ export async function POST(
       ? [{ role: "user", content: "Comienza la aventura." }, ...history]
       : history;
 
+  // Notify all clients that the DM is composing a response.
+  // Server-side REST broadcast is reliable for all players, unlike the client-side channel.send().
+  broadcastToChannel(`play:${campaignId}`, "dm_thinking", {});
+
   let dmContent: string;
   try {
     dmContent = await callDM(systemInstruction, dmHistory);
@@ -751,7 +969,8 @@ export async function POST(
   const { text: afterItems, grants: itemGrants }                        = parseItemGrants(afterLevel, characters);
   const { text: afterCasts, casts: spellCasts }                         = parseSpellCasts(afterItems, characters);
   const { text: afterHd, hdUpdates: hdSpendUpdates }                    = parseHitDiceSpend(afterCasts, characters);
-  const { text: cleanDmContent, restSlotUpdates, restHpUpdates, restHdUpdates } = parseRests(afterHd, characters);
+  const { text: afterDeaths, deaths: characterDeaths }                  = parseCharacterDeaths(afterHd, characters);
+  const { text: cleanDmContent, restSlotUpdates, restHpUpdates, restHdUpdates } = parseRests(afterDeaths, characters);
 
   // Merge HP updates: rest takes precedence over AI-emitted HP_UPDATE for same character
   const restHpIds = new Set(restHpUpdates.map((u) => u.character_id));
@@ -763,6 +982,33 @@ export async function POST(
   // Merge hit dice updates: rest recovery takes precedence over spend for same character
   const restHdIds = new Set(restHdUpdates.map((u) => u.character_id));
   const allHdUpdates = [...hdSpendUpdates.filter((u) => !restHdIds.has(u.character_id)), ...restHdUpdates];
+
+  // Process character deaths: mark as dead and remove from campaign
+  if (characterDeaths.length > 0) {
+    const deadIds = characterDeaths.map((d) => d.character_id);
+    await Promise.all([
+      admin
+        .from("characters")
+        .update({ is_dead: true, died_in_campaign_id: campaignId })
+        .in("id", deadIds),
+      admin
+        .from("campaign_characters")
+        .delete()
+        .in("character_id", deadIds),
+    ]);
+
+    // If the entire party was wiped, delete the campaign and notify everyone.
+    const { count } = await admin
+      .from("campaign_characters")
+      .select("character_id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId);
+
+    if (count === 0) {
+      await admin.from("campaigns").delete().eq("id", campaignId);
+      broadcastToChannel(`play:${campaignId}`, "party_wiped", {});
+      return NextResponse.json({ party_wiped: true });
+    }
+  }
 
   const dbUpdates = [
     ...mergedHpUpdates.map(({ character_id, hp }) =>
@@ -821,6 +1067,7 @@ export async function POST(
     item_grants: itemGrants,
     slot_updates: allSlotUpdates,
     hd_updates: allHdUpdates,
+    character_deaths: characterDeaths,
   };
   broadcastToChannel(`play:${campaignId}`, "dm_response", dmResponsePayload);
 
@@ -833,6 +1080,7 @@ export async function POST(
       item_grants: itemGrants,
       slot_updates: allSlotUpdates,
       hd_updates: allHdUpdates,
+      character_deaths: characterDeaths,
     },
     { status: 201 },
   );

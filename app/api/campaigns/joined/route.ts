@@ -54,12 +54,33 @@ export async function GET() {
     memberMap.get(cid)!.push(m.character_id as string);
   }
 
+  // Derive started_at from campaign_messages for any that don't have it set.
+  const unstartedIds = campaigns
+    .filter((c) => !(c as Record<string, unknown>).started_at)
+    .map((c) => c.id as string);
+
+  const startedSet = new Set<string>();
+  let stampedAt: string | null = null;
+  if (unstartedIds.length > 0) {
+    const { data: msgRows } = await admin
+      .from("campaign_messages")
+      .select("campaign_id")
+      .in("campaign_id", unstartedIds);
+
+    for (const m of msgRows ?? []) startedSet.add(m.campaign_id as string);
+
+    if (startedSet.size > 0) {
+      stampedAt = new Date().toISOString();
+      await admin.from("campaigns").update({ started_at: stampedAt }).in("id", [...startedSet]);
+    }
+  }
+
   const result = campaigns.map((camp) => ({
     id: camp.id,
     name: camp.name,
     setting: camp.setting,
     tone: camp.tone,
-    started_at: camp.started_at,
+    started_at: (camp.started_at as string | null) ?? (startedSet.has(camp.id as string) ? stampedAt : null),
     my_characters: (memberMap.get(camp.id as string) ?? [])
       .map((cId) => charMap.get(cId))
       .filter(Boolean),

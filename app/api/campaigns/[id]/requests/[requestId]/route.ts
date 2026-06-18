@@ -32,7 +32,7 @@ export async function PATCH(
 
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id, name")
+    .select("id, name, level")
     .eq("id", campaignId)
     .eq("user_id", user.id)
     .single();
@@ -102,12 +102,55 @@ export async function PATCH(
         .single();
 
       if (char) {
+        const { count: charInAny } = await admin
+          .from("campaign_characters")
+          .select("*", { count: "exact", head: true })
+          .eq("character_id", request.character_id as string);
+
+        if ((charInAny ?? 0) > 0) {
+          return NextResponse.json(
+            { error: "El personaje del jugador ya está en otra campaña y no puede unirse." },
+            { status: 409 },
+          );
+        }
+
+        // Level check
+        const { data: fullChar } = await admin
+          .from("characters")
+          .select("level, is_dead, name, class")
+          .eq("id", request.character_id as string)
+          .single();
+
+        if (fullChar?.is_dead) {
+          return NextResponse.json(
+            { error: "El personaje ha fallecido y no puede unirse a la campaña." },
+            { status: 409 },
+          );
+        }
+
+        // Level check: character must match campaign level exactly.
+        const campaignLevel = (campaign as { level?: number }).level ?? 1;
+        if (fullChar && (fullChar as { level: number }).level !== campaignLevel) {
+          return NextResponse.json(
+            { error: `Esta campaña es de Nivel ${campaignLevel}. El personaje es Nivel ${(fullChar as { level: number }).level}.` },
+            { status: 409 },
+          );
+        }
+
         const { error: insertError } = await admin
           .from("campaign_characters")
           .insert({ campaign_id: campaignId, character_id: request.character_id });
 
         if (insertError && insertError.code !== "23505") {
           console.error("Failed to add character after accept:", insertError);
+        }
+
+        if (fullChar) {
+          broadcastToChannel(`play:${campaignId}`, "player_joined_narration", {
+            character_name:  (fullChar as { name: string }).name,
+            character_class: (fullChar as { class: string }).class,
+            character_level: (fullChar as { level: number }).level,
+          });
         }
       }
     }

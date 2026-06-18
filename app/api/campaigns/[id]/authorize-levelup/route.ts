@@ -25,7 +25,7 @@ export async function POST(
   // Verify requester owns the campaign (is the DM).
   const { data: campaign, error: campError } = await supabase
     .from("campaigns")
-    .select("id, user_id, character_ids")
+    .select("id, user_id, character_ids, level")
     .eq("id", campaignId)
     .single();
 
@@ -76,7 +76,16 @@ export async function POST(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ authorized: count ?? targetIds.length });
+  // Bump campaign level (cap at 20).
+  const currentLevel = typeof campaign.level === "number" ? campaign.level : 1;
+  if (currentLevel < 20) {
+    await supabase
+      .from("campaigns")
+      .update({ level: currentLevel + 1 })
+      .eq("id", campaignId);
+  }
+
+  return NextResponse.json({ authorized: count ?? targetIds.length, new_level: Math.min(currentLevel + 1, 20) });
 }
 
 // ── DELETE /api/campaigns/[id]/authorize-levelup ───────────────

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { broadcastToChannel } from "@/lib/supabase/broadcast";
 
 const MAX_PARTY = 4;
@@ -24,7 +25,7 @@ export async function POST(
   // Verify campaign belongs to user.
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, level")
     .eq("id", campaignId)
     .eq("user_id", user.id)
     .single();
@@ -51,7 +52,7 @@ export async function POST(
   // Verify character belongs to user.
   const { data: character } = await supabase
     .from("characters")
-    .select("id")
+    .select("id, level, is_dead")
     .eq("id", character_id)
     .eq("user_id", user.id)
     .single();
@@ -60,6 +61,37 @@ export async function POST(
     return NextResponse.json(
       { error: "Personaje no encontrado o no te pertenece." },
       { status: 404 },
+    );
+  }
+
+  if ((character as { is_dead?: boolean }).is_dead) {
+    return NextResponse.json(
+      { error: "Este personaje ha fallecido y no puede unirse a una campaña." },
+      { status: 409 },
+    );
+  }
+
+  // Check if character is already in any campaign (admin bypasses RLS to see all campaigns).
+  const admin = createAdminClient();
+  const { count: charInAny } = await admin
+    .from("campaign_characters")
+    .select("*", { count: "exact", head: true })
+    .eq("character_id", character_id);
+
+  if ((charInAny ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "Este personaje ya pertenece a una campaña. Debes abandonarla antes de unirte a otra." },
+      { status: 409 },
+    );
+  }
+
+  // Level check: character must match campaign level exactly.
+  const campaignLevel = (campaign as { level?: number }).level ?? 1;
+  const charLevel = (character as { level: number }).level;
+  if (charLevel !== campaignLevel) {
+    return NextResponse.json(
+      { error: `Esta campaña es de Nivel ${campaignLevel}. El personaje es Nivel ${charLevel}.` },
+      { status: 409 },
     );
   }
 

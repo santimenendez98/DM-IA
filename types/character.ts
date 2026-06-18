@@ -39,8 +39,13 @@ export interface Character {
   spell_slots_used: Record<string, number>;
   hit_dice_used: number;
   level_up_authorized: boolean;
+  is_dead: boolean;
+  died_in_campaign_id: string | null;
+  expelled_from_campaign_id: string | null;
+  expelled_from_campaign_name: string | null;
   created_at: string;
   updated_at: string;
+  campaign_id: string | null;
 }
 
 export type CreateCharacterInput = {

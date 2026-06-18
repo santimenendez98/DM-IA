@@ -207,7 +207,9 @@ export async function PATCH(
       .map((m) => ((m.characters as unknown) as { user_id?: string } | null)?.user_id ?? null)
       .filter((uid): uid is string => uid !== null);
 
-    for (const uid of memberUserIds) {
+    // Notify the DM and all participating players.
+    const allUids = Array.from(new Set([user.id, ...memberUserIds]));
+    for (const uid of allUids) {
       broadcastToChannel(`user-${uid}`, "campaign_started", { campaign_id: id, started_at });
     }
     broadcastToChannel(`lobby:${id}`, "campaign_started", { campaign_id: id, started_at });
@@ -239,7 +241,7 @@ export async function DELETE(
   // Verify the campaign exists and belongs to this user before deleting.
   const { data: existing, error: fetchError } = await supabase
     .from("campaigns")
-    .select("id, name")
+    .select("id, name, started_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -251,16 +253,44 @@ export async function DELETE(
     );
   }
 
-  // Fetch members before CASCADE delete removes campaign_characters rows.
+  // Fetch members + character IDs before CASCADE delete removes campaign_characters rows.
   const admin = createAdminClient();
   const { data: members } = await admin
     .from("campaign_characters")
-    .select("characters(user_id)")
+    .select("character_id, characters(user_id)")
     .eq("campaign_id", id);
 
   const memberUserIds = (members ?? [])
     .map((m) => ((m.characters as unknown) as { user_id?: string } | null)?.user_id ?? null)
     .filter((uid): uid is string => uid !== null);
+
+  const memberCharIds = (members ?? []).map((m) => m.character_id as string);
+
+  // If the campaign was started, mark all characters as expelled so they
+  // appear in the dashboard's retired section. Check started_at first;
+  // fall back to message count for campaigns where started_at wasn't stamped.
+  if (memberCharIds.length > 0) {
+    const wasStarted = (existing as { started_at?: string | null }).started_at != null;
+
+    let shouldExpel = wasStarted;
+    if (!shouldExpel) {
+      const { count: msgCount } = await admin
+        .from("campaign_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", id);
+      shouldExpel = (msgCount ?? 0) > 0;
+    }
+
+    if (shouldExpel) {
+      await admin
+        .from("characters")
+        .update({
+          expelled_from_campaign_id:   id,
+          expelled_from_campaign_name: existing.name as string,
+        })
+        .in("id", memberCharIds);
+    }
+  }
 
   const { error } = await supabase
     .from("campaigns")

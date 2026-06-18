@@ -1904,3 +1904,36 @@
   font-size: 14px;
   line-height: 1.4;
 }
+
+/* ── Level picker ────────────────────────────────────────────── */
+
+.fieldHint {
+  font-size: 12px;
+  color: #5c4828;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.levelSelect {
+  width: 200px;
+  max-width: 100%;
+  padding: 10px 40px 10px 16px;
+  background:
+    rgba(0,0,0,0.4)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23b8860b' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+  background-size: auto, 12px;
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  color: #e0cc90;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 16px;
+  outline: none;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.levelSelect:focus { border-color: #7a5c1e; box-shadow: 0 0 0 2px rgba(184,134,11,0.15); }
+.levelSelect option { background: #1a0f05; color: #e0cc90; }

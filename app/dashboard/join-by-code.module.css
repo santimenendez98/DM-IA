@@ -146,6 +146,55 @@
 .select:focus { border-color: #7a5c1e; }
 .select option { background: #1a1208; }
 
+/* ── Campaign preview ── */
+
+.campaignPreview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid #3e2e10;
+  border-radius: 2px;
+  margin-top: 8px;
+  min-height: 32px;
+}
+
+.previewLoading {
+  font-size: 12px;
+  color: #5c4828;
+  font-style: italic;
+}
+
+.previewNotFound {
+  font-size: 12px;
+  color: #a05050;
+  font-style: italic;
+}
+
+.previewName {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  color: #c9a888;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewLevel {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e8c040;
+  background: rgba(80,40,8,0.4);
+  border: 1px solid #7a5c1e;
+  border-radius: 2px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Character list ── */
 
 .charList {
@@ -177,8 +226,7 @@
   box-sizing: border-box;
 }
 .charOption:last-child { border-bottom: none; }
-.charOption:hover:not(:disabled) { background: rgba(184,134,11,0.08); }
-.charOption:disabled { opacity: 1; cursor: not-allowed; }
+.charOption:hover { background: rgba(184,134,11,0.08); }
 
 .charOptionSelected {
   background: rgba(184,134,11,0.1) !important;
@@ -189,6 +237,8 @@
 .charOptionBlocked {
   background: rgba(80,60,160,0.04) !important;
   border-bottom-color: rgba(80,60,160,0.1) !important;
+  pointer-events: none;
+  cursor: default;
 }
 .charOptionBlocked .charName { color: #6a5898 !important; }
 
