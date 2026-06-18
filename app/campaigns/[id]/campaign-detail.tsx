@@ -212,7 +212,7 @@ export default function CampaignDetailPage() {
       const res = await fetch(`/api/campaigns/${campaign.id}/characters/${charId}`, { method: "DELETE" });
       if (res.ok) {
         setCampaign((prev) => prev ? { ...prev, characters: prev.characters.filter((c) => c.id !== charId) } : prev);
-        setAllChars((prev) => prev.map((c) => (c.id === charId ? { ...c, campaign_id: undefined } : c)));
+        setAllChars((prev) => prev.map((c) => (c.id === charId ? { ...c, campaign_id: null } : c)));
       }
       setPending(null);
     },

@@ -563,7 +563,7 @@ export async function POST(
     content?: string;
     invoke_dm?: boolean;
     dm_intro?: boolean;
-    party_event?: "player_joined";
+    party_event?: "player_joined" | "player_left";
     party_event_data?: { name: string; class: string; level: number };
   };
 
