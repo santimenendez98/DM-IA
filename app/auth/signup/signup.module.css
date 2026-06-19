@@ -405,6 +405,98 @@
   letter-spacing: 0.04em;
 }
 
+/* ── Verify step ─────────────────────────────────────────────── */
+
+.verifyPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 8px 4px;
+  gap: 0;
+}
+
+.verifyIconWrap {
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 14px rgba(58, 106, 184, 0.35));
+  animation: verifyGlow 3s ease-in-out infinite;
+}
+
+@keyframes verifyGlow {
+  0%, 100% { filter: drop-shadow(0 0 12px rgba(58, 106, 184, 0.3)); }
+  50%       { filter: drop-shadow(0 0 22px rgba(58, 106, 184, 0.55)); }
+}
+
+.verifyTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #a8c4f0;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.verifyMsg {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14.5px;
+  color: #6a85a8;
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+
+.verifyEmail {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #90b0e0;
+  margin-bottom: 16px;
+  word-break: break-all;
+  padding: 6px 14px;
+  background: rgba(58, 106, 184, 0.1);
+  border: 1px solid rgba(58, 106, 184, 0.2);
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.verifyHint {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 13.5px;
+  color: #445566;
+  line-height: 1.6;
+  margin-bottom: 22px;
+  max-width: 320px;
+}
+
+.resentBanner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 13px;
+  color: #4a9a60;
+  background: rgba(74, 154, 96, 0.1);
+  border: 1px solid rgba(74, 154, 96, 0.25);
+  border-radius: 4px;
+  padding: 7px 14px;
+  margin-bottom: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.verifyPanel .btnPrimary {
+  width: 100%;
+  margin-bottom: 0;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 520px) {

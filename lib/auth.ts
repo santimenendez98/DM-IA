@@ -46,6 +46,12 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
+export async function resendVerification(email: string) {
+  const supabase = createClient();
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) throw new Error(error.message);
+}
+
 export async function signOut() {
   const supabase = createClient();
   const { error } = await supabase.auth.signOut();
