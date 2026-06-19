@@ -231,18 +231,8 @@ export default function CampaignDetailPage() {
   async function handleStart() {
     if (!campaign || starting) return;
     setStarting(true);
-
-    if (!isStarted) {
-      const res = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ started_at: new Date().toISOString() }),
-      });
-      if (!res.ok) { setStarting(false); return; }
-    }
-
     loader.start();
-    router.push(`/campaigns/${campaign.id}/play`);
+    router.push(`/campaigns/${campaign.id}/lobby`);
   }
 
   // ── Loading ──────────────────────────────────────────────────
@@ -518,7 +508,7 @@ export default function CampaignDetailPage() {
                   )}
                   <button
                     className={s.slotView}
-                    onClick={() => { loader.start(); router.push(`/characters/${char.id}`); }}
+                    onClick={() => { loader.start(); router.push(`/characters/${char.id}?from=/campaigns/${campaign.id}`); }}
                     title={trc.viewSheetTitle ?? "Ver planilla"}
                     type="button"
                   >

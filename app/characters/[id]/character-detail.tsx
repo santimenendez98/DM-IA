@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { getCurrUser } from "@/lib/auth";
 import { loader } from "@/lib/loader";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
@@ -453,6 +453,8 @@ function mergeCampaigns(own: Campaign[], joined: SlimJoinedCampaign[]): Campaign
 export default function CharacterDetail() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const backHref = searchParams.get("from") ?? "/dashboard";
   const { lang } = useLang();
   const tr = t[lang].character;
   const settings   = t[lang].dashboard.settings  as Record<string, string>;
@@ -603,7 +605,7 @@ export default function CharacterDetail() {
       <div className={s.page}>
         <div className={s.stars} aria-hidden />
         <div className={s.content}>
-          <button className={s.back} onClick={() => router.push("/dashboard")} type="button">
+          <button className={s.back} onClick={() => router.push(backHref)} type="button">
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -617,7 +619,7 @@ export default function CharacterDetail() {
               <circle cx="24" cy="34" r="1.5" fill="#4a3510" />
             </svg>
             <p>{tr.notFoundMsg}</p>
-            <button className={s.btnSecondary} onClick={() => router.push("/dashboard")}>{tr.back}</button>
+            <button className={s.btnSecondary} onClick={() => router.push(backHref)}>{tr.back}</button>
           </div>
         </div>
       </div>
@@ -630,7 +632,7 @@ export default function CharacterDetail() {
     setDeleting(true); setDeleteError(null);
     try {
       const res = await fetch(`/api/characters/${id}`, { method: "DELETE" });
-      if (res.status === 204) { router.push("/dashboard"); return; }
+      if (res.status === 204) { router.push(backHref); return; }
       const body = await res.json() as { error?: string };
       setDeleteError(body.error ?? tr.deleteErrFallback);
       setDeleteConfirm(false);
@@ -818,7 +820,7 @@ export default function CharacterDetail() {
 
         {/* Top bar */}
         <div className={s.topBar}>
-          <button className={s.back} onClick={() => router.push("/dashboard")} type="button">
+          <button className={s.back} onClick={() => router.push(backHref)} type="button">
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <line x1="10" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M5 3L2 6l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />

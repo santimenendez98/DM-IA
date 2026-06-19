@@ -44,6 +44,214 @@ function proficiencyBonus(level: number): number {
   return Math.floor((level - 1) / 4) + 2;
 }
 
+function computeTensionLevel(characters: Character[]): { score: number; label: string; tone: string } | undefined {
+  if (characters.length === 0) return undefined;
+
+  // HP component (0–40)
+  const avgHpPct = characters.reduce((sum, c) => sum + c.hp / c.max_hp, 0) / characters.length;
+  const hpScore = Math.round((1 - avgHpPct) * 40);
+
+  // Spell slots component (0–35) — casters only
+  const casters = characters.filter((c) => hasSpellSlots(c.class));
+  let slotScore = 0;
+  if (casters.length > 0) {
+    const avgDepletion =
+      casters.reduce((sum, c) => {
+        const maxSlots = getMaxSpellSlots(c.class, c.level);
+        const totalMax = Object.values(maxSlots).reduce((a, b) => a + b, 0);
+        if (totalMax === 0) return sum;
+        const used = Object.values(c.spell_slots_used ?? {}).reduce((a, b) => a + b, 0);
+        return sum + used / totalMax;
+      }, 0) / casters.length;
+    slotScore = Math.round(avgDepletion * 35);
+  }
+
+  // Hit dice component (0–25)
+  const avgHdDepletion =
+    characters.reduce((sum, c) => sum + (c.hit_dice_used ?? 0) / c.level, 0) / characters.length;
+  const hdScore = Math.round(avgHdDepletion * 25);
+
+  const score = Math.min(100, hpScore + slotScore + hdScore);
+
+  let label: string;
+  let tone: string;
+  if (score < 20) {
+    label = "baja";
+    tone = "El grupo está descansado. Tono: aventura con confianza, espacio para humor y exploración.";
+  } else if (score < 45) {
+    label = "media";
+    tone = "Recursos parcialmente gastados. Tono: cautela creciente, decisiones más pesadas.";
+  } else if (score < 70) {
+    label = "alta";
+    tone = "Grupo desgastado. Tono: urgente, cada decisión importa, el peligro es palpable.";
+  } else {
+    label = "crítica";
+    tone = "Grupo al límite. Tono: supervivencia, cada acción puede ser la última.";
+  }
+
+  return { score, label, tone };
+}
+
+function computePacingHint(history: Array<{ role: string; content: string }>): string | undefined {
+  const recentDm = history.filter((m) => m.role === "dm").slice(-6);
+  if (recentDm.length < 3) return undefined;
+
+  const combatCount = recentDm.filter((m) => m.content.includes("TURNO:")).length;
+  const explorationCount = recentDm.filter((m) => !m.content.includes("TURNO:")).length;
+
+  if (combatCount >= 4) {
+    return "RITMO: Varias rondas de combate seguidas. Tras esta secuencia, busca un respiro narrativo: un momento de diálogo, una decisión estratégica, o un detalle ambiental que dé textura al espacio entre acción y acción.";
+  }
+  if (explorationCount >= 5 && combatCount === 0) {
+    return "RITMO: Varias escenas sin tensión mecánica. Si el contexto lo permite, introduce un elemento de presión (una amenaza que se acerca, un plazo que vence, un testigo inesperado) para mantener el interés.";
+  }
+
+  return undefined;
+}
+
+function computeDifficultyHint(characters: Character[]): string | undefined {
+  if (characters.length === 0) return undefined;
+
+  const avgHpPct = characters.reduce((sum, c) => sum + c.hp / c.max_hp, 0) / characters.length;
+  const criticalCount = characters.filter((c) => c.hp / c.max_hp < 0.2).length;
+
+  if (criticalCount > 0 || avgHpPct < 0.25) {
+    return `MONITOR DE DIFICULTAD: Grupo en estado crítico (PV medios ${Math.round(avgHpPct * 100)}%). Ajusta diegéticamente sin romper la inmersión: un enemigo duda, los refuerzos tardan, un aliado aparece, el terreno favorece a los PJs. Mantén la amenaza narrativa pero da espacio real de recuperación.`;
+  }
+
+  if (avgHpPct > 0.85) {
+    const casters = characters.filter((c) => hasSpellSlots(c.class));
+    const allSlotsFresh = casters.every((c) => {
+      const maxSlots = getMaxSpellSlots(c.class, c.level);
+      const totalMax = Object.values(maxSlots).reduce((a, b) => a + b, 0);
+      if (totalMax === 0) return true;
+      const used = Object.values(c.spell_slots_used ?? {}).reduce((a, b) => a + b, 0);
+      return used / totalMax < 0.25;
+    });
+    if (allSlotsFresh) {
+      return `MONITOR DE DIFICULTAD: Grupo en excelente forma (PV ${Math.round(avgHpPct * 100)}%, recursos frescos). Puedes intensificar: añade un giro inesperado, un refuerzo enemigo, o una complicación ambiental.`;
+    }
+  }
+
+  return undefined;
+}
+
+function computeSpotlightHint(
+  history: Array<{ role: string; content: string }>,
+  characters: Character[],
+): string | undefined {
+  if (characters.length < 2) return undefined;
+
+  const counts: Record<string, number> = {};
+  for (const c of characters) counts[c.name] = 0;
+
+  for (const msg of history) {
+    if (msg.role !== "user") continue;
+    for (const c of characters) {
+      if (msg.content.startsWith(c.name + ":") || msg.content === c.name) {
+        counts[c.name]++;
+        break;
+      }
+    }
+  }
+
+  const entries = Object.entries(counts);
+  const max = Math.max(...entries.map(([, v]) => v));
+  if (max < 2) return undefined;
+
+  const underrepresented = entries
+    .filter(([, v]) => max > 0 && v / max < 0.35)
+    .map(([name]) => name);
+
+  if (underrepresented.length === 0) return undefined;
+
+  return `SPOTLIGHT: ${underrepresented.join(", ")} lleva${underrepresented.length > 1 ? "n" : ""} varios turnos sin protagonismo. Busca una oportunidad natural (habilidad única, momento de backstory, decisión importante) para darle${underrepresented.length > 1 ? "s" : ""} un momento de brillo.`;
+}
+
+const CLASS_FANTASY: Record<string, string> = {
+  "Bárbaro":    "Crea situaciones donde Rage sea la respuesta obvia (aliados en peligro, enemigo poderoso). Ofrece oportunidades de Reckless Attack cuando el riesgo valga la pena. El entorno le favorece: mesas que voltear, columnas que romper.",
+  "Bardo":      "Incluye momentos sociales, culturales o performativos donde el Bardo brille. La Inspiración Bárdica debe tener un uso obvio en cada escena de tensión. Usa conocimiento musical, Thieves' Cant o pistas culturales.",
+  "Clérigo":    "Amenazas de no-muertos, dilemas morales o momentos de fe extrema activan Channel Divinity. Lay on Hands en el momento más dramático. La divinidad del Clérigo debe tener presencia narrativa.",
+  "Druida":     "Entornos naturales corrompidos, animales pidiendo ayuda, o situaciones donde Wild Shape sea la solución creativa inesperada. El equilibrio natural del mundo es su motivación.",
+  "Guerrero":   "Posicionamiento táctico donde Action Surge sea decisivo. Second Wind como momento de recuperación dramática. El Fighting Style del Guerrero debe verse en la descripción del combate.",
+  "Monje":      "Movilidad extrema como ventaja táctica: muros, flanqueos rápidos, terreno difícil. Ki en el momento oportuno. Stunning Strike contra el enemigo más peligroso de la escena.",
+  "Paladín":    "Presencia de injusticia clara o mal absoluto → Smite épico. Lay on Hands en el instante crítico. El Aura del Paladín protege a aliados cercanos visiblemente.",
+  "Explorador": "Activa Terreno Favorecido y Enemigo Favorecido cuando el contexto los haga relevantes. Hunter's Mark en el objetivo más peligroso. Tracking y exploración del entorno natural.",
+  "Pícaro":     "Crea oportunidades de Sneak Attack (flanqueo, aliado adyacente, distractor). Incluye cerraduras, trampas o secretos donde Expertise o Thieves' Cant sean la única solución.",
+  "Hechicero":  "Metamagic en el momento climático: Quickened para turno extra decisivo, Twinned para proteger dos aliados a la vez. El origen sorcerous del personaje tiene relevancia narrativa.",
+  "Brujo":      "El Patrón tiene presencia narrativa, no solo mecánica. Eldritch Blast como herramienta versátil. Las Invocaciones del Brujo deben brillar cuando el contexto las haga únicas.",
+  "Mago":       "Preparación y anticipación: el Mago que predijo este problema. Ritual Casting para exploración sin coste. Arcane Recovery como giro táctico en el momento crítico.",
+};
+
+function computeClassFantasyHints(characters: Character[]): string | undefined {
+  const hints = characters
+    .map((c) => {
+      const hint = CLASS_FANTASY[c.class];
+      return hint ? `• ${c.name} (${c.class}): ${hint}` : null;
+    })
+    .filter(Boolean) as string[];
+
+  if (hints.length === 0) return undefined;
+  return `\nFANTASÍA DE CLASE — crea oportunidades para estas mecánicas en la sesión:\n${hints.join("\n")}`;
+}
+
+function computeNarrativeArcHint(
+  history: Array<{ role: string; content: string }>,
+  totalTurn: number,
+): string | undefined {
+  const dmCount = history.filter((m) => m.role === "dm").length;
+
+  if (totalTurn <= 4 || dmCount <= 2) {
+    return "ARCO NARRATIVO — Apertura: establece el escenario con detalles sensoriales, presenta un misterio o amenaza que motive la exploración, e introduce al menos un NPC memorable. Planta semillas que puedas cosechar más adelante.";
+  }
+  if (totalTurn >= 30 || dmCount >= 12) {
+    return "ARCO NARRATIVO — Clímax: todos los hilos de la trama convergen. Introduce una revelación, giro o complicación que cambie las suposiciones del grupo. Las decisiones de ahora deben tener peso permanente.";
+  }
+  if (totalTurn >= 15 || dmCount >= 6) {
+    return "ARCO NARRATIVO — Desarrollo: escala las apuestas. Profundiza en NPCs presentados, activa consecuencias de decisiones pasadas, y añade una complicación que fuerce al grupo a replantearse su estrategia.";
+  }
+
+  return undefined;
+}
+
+function computeBackstoryHook(
+  characters: Character[],
+  history: Array<{ role: string; content: string }>,
+): string | undefined {
+  if (characters.length === 0) return undefined;
+
+  // Compute spotlight counts (same logic as computeSpotlightHint)
+  const counts: Record<string, number> = {};
+  for (const c of characters) counts[c.name] = 0;
+  for (const msg of history) {
+    if (msg.role !== "user") continue;
+    for (const c of characters) {
+      if (msg.content.startsWith(c.name + ":") || msg.content === c.name) {
+        counts[c.name]++;
+        break;
+      }
+    }
+  }
+  const max = Math.max(...Object.values(counts));
+  if (max < 2) return undefined;
+
+  const hooks = characters
+    .filter((c) => {
+      const hasBackstory = !!c.backstory?.trim();
+      const underrepresented = counts[c.name] / max < 0.4;
+      return hasBackstory && underrepresented;
+    })
+    .map((c) => {
+      const backstory = c.backstory!.trim();
+      const excerpt = backstory.length > 110 ? backstory.slice(0, 110) + "…" : backstory;
+      return `• ${c.name} (${c.class}): "${excerpt}"`;
+    });
+
+  if (hooks.length === 0) return undefined;
+
+  return `GANCHO DE TRASFONDO: Estos personajes con historia no activada llevan tiempo sin protagonismo — conecta su pasado con la escena actual de forma orgánica:\n${hooks.join("\n")}`;
+}
+
 function buildSystemInstruction(
   campaign: {
     name: string;
@@ -53,7 +261,17 @@ function buildSystemInstruction(
   },
   characters: Character[],
   lang: Lang = "es",
+  opts?: {
+    spotlightHint?: string;
+    tension?: ReturnType<typeof computeTensionLevel>;
+    pacingHint?: string;
+    difficultyHint?: string;
+    classHints?: string;
+    arcHint?: string;
+    backstoryHook?: string;
+  },
 ): string {
+  const { spotlightHint, tension, pacingHint, difficultyHint, classHints, arcHint, backstoryHook } = opts ?? {};
   const setting = SETTING_LABELS[campaign.setting] ?? campaign.setting;
   const tone = TONE_LABELS[campaign.tone] ?? campaign.tone;
 
@@ -91,8 +309,17 @@ function buildSystemInstruction(
   const lines = [
     // ── Identidad ────────────────────────────────────────────────
     `DM de D&D 5e. Campaña: "${campaign.name}". Escenario: ${setting}. Tono: ${tone}.${campaign.system_prompt ? ` ${campaign.system_prompt}` : ""}`,
+    arcHint ? `\n${arcHint}` : "",
     `\nGRUPO:\n${partyList}`,
     `Usa la historia de cada personaje (campo "Historia") para enriquecer la narrativa cuando sea relevante: referencias a su pasado, motivaciones, traumas, vínculos o secretos. No la fuerces en cada respuesta; incorpórala de forma natural cuando el contexto lo permita.`,
+
+    // ── TensionTracker ───────────────────────────────────────────
+    tension
+      ? `\nTENSIÓN ACTUAL: ${tension.label} (${tension.score}/100). ${tension.tone}`
+      : "",
+
+    // ── ClassFantasyEngine ───────────────────────────────────────
+    classHints ?? "",
 
     // ── Reglas compactas ─────────────────────────────────────────
     `\nREGLAS CLAVE D&D 5e:`,
@@ -110,6 +337,17 @@ function buildSystemInstruction(
     `[🎲 1d20+MOD = TOTAL → resultado]. Nat20 = crítico (daño ×2). Nat1 = fallo crítico.`,
     `Iniciativa al inicio de combate: tira 1d20+DES por criatura, ordena. Ataque vs CA del PJ → tú resuelves y narras el daño con HP_UPDATE.`,
 
+    // ── CreatureBehaviorEngine ───────────────────────────────────
+    `\nARQUETIPOS DE CRIATURA — comportamiento táctico (aplica al definir turnos de NPCs):`,
+    `• Bruto: carga al objetivo más cercano, ignora flanqueos. Prefiere golpes poderosos sobre maniobras.`,
+    `• Escaramuzador: ataca y se aleja con Desenganche. Nunca permanece en melé si puede evitarlo.`,
+    `• Acechador: golpea desde ocultación (ventaja en ataque), se vuelve a ocultar tras atacar.`,
+    `• Artillería: posición estática, daño máximo por turno. Vulnerable si el PJ ocupa su zona.`,
+    `• Controlador: prioriza hechizos de área o debuff. Apunta primero al lanzador de hechizos del grupo.`,
+    `• Líder: mueve primero a sus subordinados antes de actuar. Huye o se rinde si queda solo.`,
+    `• Soldado raso: ataca al objetivo que más aliados atacan. Se desmoraliza si cae el Líder.`,
+    `Los enemigos inteligentes (INT ≥12) recuerdan tácticas de rondas anteriores y explotan debilidades conocidas de los PJs.`,
+
     // ── Formato de combate y acciones ────────────────────────────
     `\nFORMATO TURNOS — OBLIGATORIO en combate activo y en escenas con orden de actuación:`,
     `Cada turno lleva esta línea exacta (línea propia, sin nada antes ni después):`,
@@ -123,6 +361,10 @@ function buildSystemInstruction(
     `Fuera de combate y diálogo: NO uses TURNO:. Narra normalmente con párrafos.`,
     `EJEMPLO (ronda con jefe + NPC + 2 jugadores):`,
     `Iniciativas: Archimago 19, Guardia 14, Lyra 11, Thorin 8.\nTURNO:{"actor":"Archimago","tipo":"jefe","iniciativa":19}\nEl Archimago extiende la mano y lanza un rayo de frío sobre Thorin. [🎲 1d20+7 = 18 vs CA 15 → GOLPE] El rayo impacta causando 14 de daño de frío.\nHP_UPDATE:{"personaje":"Thorin","hp":6}\nTURNO:{"actor":"Guardia Oscuro","tipo":"npc","iniciativa":14}\nEl guardia flanquea a Lyra con su espada. [🎲 1d20+4 = 9 vs CA 13 → FALLO] El golpe no consigue alcanzarla.\nTURNO:{"actor":"Lyra","tipo":"jugador","iniciativa":11}\nLyra, el guardia falló su ataque. Tienes ventaja desde esta posición.\nTIRADA_JUGADOR:{"dado":"1d20","mod":"DES","bono_prof":true,"tipo":"Ataque","cd":14,"personaje":"Lyra"}\nTURNO:{"actor":"Thorin","tipo":"jugador","iniciativa":8}\nThorin, estás a 6 PV tras el rayo. El Archimago está a 30 pies.\nTIRADA_JUGADOR:{"dado":"1d20","mod":"FUE","bono_prof":true,"tipo":"Ataque","cd":16,"personaje":"Thorin"}`,
+
+    // ── Roll Gating ──────────────────────────────────────────────
+    `\nFILTRO DE TIRADAS — aplica este test ANTES de emitir TIRADA_JUGADOR para habilidades:`,
+    `Pide tirada SOLO si se cumplen LAS TRES condiciones: (1) El fracaso ES posible en la ficción (abrir puerta sin cerrojo → no hay tirada). (2) El fracaso ES narrativamente interesante (tiene consecuencias reales, no bloquea la trama). (3) Existe habilidad/estadística claramente relevante. Si falta cualquiera, narra el resultado directamente sin tirada. Los ataques en combate siempre requieren tirada; el filtro aplica principalmente a acciones de habilidad fuera de combate.`,
 
     // ── Tiradas de jugadores ─────────────────────────────────────
     `\nTIRADAS DE JUGADORES — obligatorio pedir en estos casos (NO omitir):`,
@@ -164,6 +406,28 @@ function buildSystemInstruction(
     `· LIBRE (exploración, diálogo, decisiones narrativas): termina describiendo la situación y haciendo UNA sola pregunta abierta. NUNCA listes opciones con viñetas, letras o números. Deja que el jugador imagine y responda libremente. Ej: "El mercader te extiende un mapa arrugado señalando el Bosque Verde. ¿Qué haces?"`,
     `· OPCIONES (combate activo, mecánica con consecuencias inmediatas y concretas): puedes ofrecer 2-3 opciones breves SOLO si las alternativas son mutuamente excluyentes y mecánicamente distintas. Ej: "¿Atacas al guardia, intentas esquivar hacia la puerta, o negocias?" — en una sola línea, nunca como lista.`,
     `Regla general: prefiere el modo LIBRE. Usa OPCIONES solo en combate o cuando las alternativas cambian radicalmente el resultado mecánico. No decidas por los jugadores.`,
+
+    // ── Reward Balance ───────────────────────────────────────────
+    `\nRECOMPENSAS — alterna entre cuatro tipos (no todas las victorias son botín físico):`,
+    `• Mecánica: ítems, recuperación de recursos, ventaja situacional, mejora de equipo.`,
+    `• Narrativa: revelaciones de trama, secretos de NPCs, mapas, pistas, lore del mundo.`,
+    `• Relacional: aliados, deudas de favor, reputación, acceso a facciones.`,
+    `• Protagonismo: momento de brillo de un PJ — su habilidad resuelve el problema, su trasfondo se activa, el mundo reconoce su hazaña.`,
+    `Varía el tipo en cada arco. No emitas ITEM_GRANT por defecto; prioriza recompensas narrativas y relacionales cuando el contexto lo permita.`,
+
+    // ── Information Layering ─────────────────────────────────────
+    `\nCAPAS DE INFORMACIÓN — entrega en niveles, nunca todo de golpe:`,
+    `• Capa 0 — Libre: información ambiental evidente. La narras sin tirada ("ves que la puerta está abierta").`,
+    `• Capa 1 — Observación: detalle perceptible si el PJ presta atención. Tirada opcional CD 10 o gratis si lo busca activamente.`,
+    `• Capa 2 — Investigación: requiere acción declarada y tirada (Percepción / Investigación / Historia, CD 12-18).`,
+    `• Capa 3 — Oculto: bloqueado por habilidad especial, aliado, ritual, o decisión narrativa deliberada.`,
+    `Regla de las 3 pistas: cualquier revelación crítica para el avance tiene al menos 3 vías de acceso distintas. Nunca pongas el avance detrás de una sola tirada fallida.`,
+
+    // ── Dynamic hints (Phase 2 + 3 systems) ─────────────────────
+    difficultyHint ? `\n${difficultyHint}` : "",
+    pacingHint ? `\n${pacingHint}` : "",
+    spotlightHint ? `\n${spotlightHint}` : "",
+    backstoryHook ? `\n${backstoryHook}` : "",
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -902,7 +1166,6 @@ export async function POST(
   // ── Invoke DM ─────────────────────────────────────────────
 
   const characters = partyRows.map((r) => r.characters) as Character[];
-  const systemInstruction = buildSystemInstruction(campaign, characters, lang);
 
   // Fetch up to 20 recent messages for context (includes the one just inserted)
   const { data: historyRows } = await admin
@@ -936,6 +1199,23 @@ export async function POST(
     history[0]?.role === "dm"
       ? [{ role: "user", content: "Comienza la aventura." }, ...history]
       : history;
+
+  const tension = computeTensionLevel(characters);
+  const pacingHint = computePacingHint(history);
+  const difficultyHint = computeDifficultyHint(characters);
+  const spotlightHint = computeSpotlightHint(history, characters);
+  const classHints = computeClassFantasyHints(characters);
+  const arcHint = computeNarrativeArcHint(history, turn_number);
+  const backstoryHook = computeBackstoryHook(characters, history);
+  const systemInstruction = buildSystemInstruction(campaign, characters, lang, {
+    tension,
+    pacingHint,
+    difficultyHint,
+    spotlightHint,
+    classHints,
+    arcHint,
+    backstoryHook,
+  });
 
   // Notify all clients that the DM is composing a response.
   // Server-side REST broadcast is reliable for all players, unlike the client-side channel.send().
